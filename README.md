@@ -12,10 +12,23 @@ hay nada que instalar en el computador (ni poppler ni Tesseract).
 
 1. Abre la página.
 2. Arrastra los PDF de los cupones.
-3. Presiona **Procesar** y espera.
-4. Revisa la tabla y corrige a mano cualquier nombre que lo necesite.
-5. **Descargar ZIP renombrado** (o **Guardar en una carpeta…** en Chrome/Edge,
-   que escribe los archivos directamente donde elijas).
+3. Presiona **Procesar**. El anillo de la marca marca el avance.
+4. Revisa la tabla y corrige lo que haga falta.
+5. **Descargar ZIP** (o **Guardar en carpeta…** en Chrome/Edge, que escribe los
+   archivos directamente donde elijas).
+
+La pantalla tiene dos momentos. Mientras no hay resultados manda la zona de
+carga; en cuanto los hay, se encoge a una franja y la tabla pasa a ocupar el
+espacio.
+
+En la revisión, **los cuatro contadores son filtros**: con 110 cupones, lo único
+que se necesita de verdad es saltar a los pocos que piden atención. Pulsa
+**Revisar** o **Sin nombre** para ver solo esos; los contadores en cero no se
+pueden pulsar. Cada fila lleva un filo de color a la izquierda con su estado, así
+que se lee sin buscar la pastilla.
+
+Los nombres se editan en la propia tabla, y **Enter salta al siguiente**: se
+pueden corregir varios seguidos sin soltar el teclado.
 
 ### Cómo lee los PDF
 

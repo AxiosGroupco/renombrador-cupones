@@ -302,9 +302,20 @@
 
   function estado(msg) { $('estado').textContent = msg; }
 
+  /**
+   * El avance se dibuja sobre el anillo de la marca: el círculo lleva
+   * pathLength="100", así que el desfase del trazo es directamente el
+   * porcentaje que falta.
+   */
   function progreso(hechos, total) {
-    $('barra').classList.toggle('oculto', total === 0);
-    $('barra').firstElementChild.style.width = total ? (100 * hechos / total) + '%' : '0';
+    const pct = total ? (100 * hechos / total) : 0;
+    $('avance').style.strokeDashoffset = String(100 - pct);
+  }
+
+  function trabajando(si, titulo, sub) {
+    $('zona').classList.toggle('trabajando', si);
+    if (titulo !== undefined) $('zonaTitulo').textContent = titulo;
+    if (sub !== undefined) $('zonaSub').textContent = sub;
   }
 
   function pintarResumen() {
@@ -314,7 +325,32 @@
     $('cVerif').textContent = c.verificado;
     $('cRevisar').textContent = c.revisar;
     $('cSin').textContent = c['sin-nombre'];
-    $('tarjetas').classList.toggle('oculto', !S.filas.length);
+    // Un filtro sin resultados no se puede pulsar.
+    $('f-verificado').disabled = !c.verificado;
+    $('f-revisar').disabled = !c.revisar;
+    $('f-sin-nombre').disabled = !c['sin-nombre'];
+  }
+
+  /* --------------------------------------------------------------------- */
+  /* Filtros                                                                */
+  /*                                                                        */
+  /* Con 110 filas, lo único que hace falta de verdad es saltar a las pocas  */
+  /* que piden atención. Por eso los contadores son los propios filtros.     */
+  /* --------------------------------------------------------------------- */
+
+  function aplicarFiltro(cual) {
+    S.filtro = cual;
+    for (const b of document.querySelectorAll('.filtro')) {
+      b.setAttribute('aria-pressed', String(b.dataset.filtro === cual));
+    }
+    let visibles = 0;
+    for (const tr of $('cuerpo').children) {
+      if (tr.classList.contains('fila-ocr')) { tr.classList.add('oculta'); continue; }
+      const ok = cual === 'todos' || tr.dataset.estado === cual;
+      tr.classList.toggle('oculta', !ok);
+      if (ok) visibles++;
+    }
+    $('vacio').classList.toggle('oculto', visibles > 0);
   }
 
   const ETIQUETA = {
@@ -326,6 +362,8 @@
   function pintarFila(f, idx) {
     const tr = document.createElement('tr');
     tr.dataset.idx = String(idx);
+    tr.dataset.estado = f.estado;
+    tr.className = 's-' + f.estado;
 
     const tdO = document.createElement('td');
     tdO.className = 'orig';
@@ -343,9 +381,22 @@
       f.nuevoNombre = (v && f.mes && f.anio) ? E.construirNombreArchivo(v, f.mes, f.anio) : null;
       f.estado = v ? (f.estadoOriginal === 'verificado' ? 'verificado' : 'revisar') : 'sin-nombre';
       resolverColisiones(S.filas);
-      tr.querySelector('.etq').className = 'etq e-' + f.estado;
-      tr.querySelector('.etq').textContent = ETIQUETA[f.estado];
+      tr.dataset.estado = f.estado;
+      tr.className = 's-' + f.estado;
+      const et = tr.querySelector('.etq');
+      et.className = 'etq e-' + f.estado;
+      et.textContent = ETIQUETA[f.estado];
       pintarResumen();
+    });
+    // Enter salta al siguiente nombre visible: corregir varios seguidos sin
+    // soltar el teclado.
+    inp.addEventListener('keydown', ev => {
+      if (ev.key !== 'Enter') return;
+      ev.preventDefault();
+      const campos = [...$('cuerpo').querySelectorAll('tr:not(.oculta) input.nom')];
+      const i = campos.indexOf(inp);
+      if (i > -1 && campos[i + 1]) { campos[i + 1].focus(); campos[i + 1].select(); }
+      else inp.blur();
     });
     tdN.appendChild(inp);
 
@@ -398,8 +449,10 @@
     const cuerpo = $('cuerpo');
     cuerpo.textContent = '';
     S.filas.forEach((f, i) => cuerpo.appendChild(pintarFila(f, i)));
-    $('tablaEnv').classList.toggle('oculto', !S.filas.length);
-    $('acciones').classList.toggle('oculto', !S.filas.length);
+    const hay = S.filas.length > 0;
+    $('revision').classList.toggle('visible', hay);
+    $('intake').classList.toggle('compacto', hay);
+    aplicarFiltro(S.filtro || 'todos');
   }
 
   /* --------------------------------------------------------------------- */
@@ -438,6 +491,7 @@
       let hechos = 0;
 
       progreso(0, total);
+      trabajando(true, `Procesando ${total} cupones`, 'Puedes cambiar de pestaña sin que se detenga');
       estado(`Procesando 0 de ${total}…`);
 
       // Se lanzan de a nHilos para no agotar la memoria con canvases grandes.
@@ -490,7 +544,11 @@
         : porTexto ? ' (todos por capa de texto, sin OCR)' : '';
       estado(S.cancelado
         ? `Cancelado. Se alcanzaron a procesar ${hechos} de ${total}.`
-        : `Listo: ${total} archivos en ${seg}s${desglose}. Revisa los nombres y descarga el ZIP.`);
+        : `Listo: ${total} archivos en ${seg}s${desglose}.`);
+      trabajando(false,
+        S.cancelado ? 'Proceso cancelado' : 'Listo — revisa los nombres abajo',
+        'Arrastra otro lote para volver a empezar');
+      if (!S.cancelado) $('revision').scrollIntoView({ block: 'start' });
     } catch (err) {
       estado('Error: ' + (err && err.message ? err.message : err));
       console.error(err);
@@ -498,6 +556,7 @@
       S.procesando = false;
       $('procesar').disabled = false;
       $('cancelar').classList.add('oculto');
+      $('zona').classList.remove('trabajando');
       progreso(0, 0);
     }
   }
@@ -584,7 +643,10 @@
     if (!pdfs.length) { estado('No se encontraron archivos PDF.'); return; }
     S.archivos = pdfs;
     $('procesar').disabled = false;
-    estado(`${pdfs.length} PDF listos para procesar.`);
+    trabajando(false,
+      `${pdfs.length} ${pdfs.length === 1 ? 'cupón listo' : 'cupones listos'}`,
+      'Presiona Procesar, o arrastra otros para reemplazarlos');
+    estado('');
   }
 
   function iniciarEventos() {
@@ -615,12 +677,18 @@
       () => descargarBlob(new Blob([construirCsv()], { type: 'text/csv;charset=utf-8' }),
         `reporte_renombrado ${sufijoPeriodo()}.csv`));
     $('guardarCarpeta').addEventListener('click', guardarEnCarpeta);
+    for (const b of document.querySelectorAll('.filtro')) {
+      b.addEventListener('click', () => aplicarFiltro(b.dataset.filtro));
+    }
+
     $('limpiar').addEventListener('click', () => {
-      S.archivos = []; S.filas = [];
+      S.archivos = []; S.filas = []; S.filtro = 'todos';
       entrada.value = '';
       pintarTabla(); pintarResumen();
       $('procesar').disabled = true;
+      trabajando(false, 'Arrastra aquí los cupones en PDF', 'o haz clic para seleccionarlos');
       estado('');
+      window.scrollTo({ top: 0 });
     });
 
     window.addEventListener('beforeunload', e => {
