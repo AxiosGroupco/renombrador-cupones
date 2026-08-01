@@ -1,0 +1,14 @@
+# DATOS REALES DE ARRENDATARIOS — no se publican nunca.
+# Contiene ~1.059 nombres y 929 cédulas/NIT sacados del log del .exe.
+# Para las pruebas se versiona test/fixtures-anon.js, generado con
+# test/anonimizar.py, que conserva la estructura pero no los datos.
+test/fixtures.js
+
+# El log del .exe original, por lo mismo.
+renombrado_log.log
+*.log
+
+# Artefacto de build: 6,9 MB que se regeneran con `python3 build.py`.
+renombrador-cupones.html
+
+.DS_Store

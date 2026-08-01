@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Renombrador de Cupones — Grupo Andino</title>
+<style>
+  /* Identidad de Grupo Andino Inmobiliario.
+     Del logo salen tres colores: el verde hoja del anillo, el verde bosque de
+     la palabra, y el petróleo del degradado en el borde derecho.
+
+     El acento (botones, foco) es el verde bosque, que es el color primario de
+     la marca. Para que el estado no compita con él, "verificado" usa el verde
+     hoja —mucho más claro— sobre pastilla pálida, y el petróleo queda para
+     realces secundarios. */
+  :root {
+    --hoja: #5fb94a; --bosque: #0e6b3c; --petroleo: #14707f;
+
+    --bg: #fafbf9; --fg: #12211a; --mut: #5f6b63; --bord: #dce3d8;
+    --panel: #eef2ec; --acc: #0e6b3c; --acc-fg: #fff;
+    --ok: #2f7d33; --ok-bg: #e4f2df;
+    --warn: #8a5a08; --warn-bg: #fbf1d9;
+    --bad: #a8321f; --bad-bg: #fbeae6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1411; --fg: #e6ede7; --mut: #8fa096; --bord: #24322a;
+      --panel: #131c17; --acc: #6cc44a; --acc-fg: #08150e;
+      --ok: #7bcf63; --ok-bg: #122a15;
+      --warn: #e0b45f; --warn-bg: #2a2213;
+      --bad: #f08a7a; --bad-bg: #2c1a18;
+    }
+  }
+  /* El visor puede forzar el tema; esto debe ganarle a la consulta de arriba. */
+  :root[data-theme="light"] {
+    --bg: #fafbf9; --fg: #12211a; --mut: #5f6b63; --bord: #dce3d8;
+    --panel: #eef2ec; --acc: #0e6b3c; --acc-fg: #fff;
+    --ok: #2f7d33; --ok-bg: #e4f2df;
+    --warn: #8a5a08; --warn-bg: #fbf1d9;
+    --bad: #a8321f; --bad-bg: #fbeae6;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1411; --fg: #e6ede7; --mut: #8fa096; --bord: #24322a;
+    --panel: #131c17; --acc: #6cc44a; --acc-fg: #08150e;
+    --ok: #7bcf63; --ok-bg: #122a15;
+    --warn: #e0b45f; --warn-bg: #2a2213;
+    --bad: #f08a7a; --bad-bg: #2c1a18;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .env { max-width: 1180px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+  header { border-bottom: 1px solid var(--bord); padding-bottom: 1.1rem; margin-bottom: 1.5rem; }
+  .marca-env { display: flex; align-items: center; gap: .85rem; }
+  .marca { width: 46px; height: 46px; flex: none; }
+  /* Bloque de marca calcado del logo: nombre en negrita apretada sobre
+     bajada en versalitas muy espaciadas y ligeras. */
+  .lockup { display: flex; flex-direction: column; gap: .1rem; }
+  .lockup .nom { font-size: .95rem; font-weight: 800; letter-spacing: -.015em; color: var(--fg); line-height: 1; }
+  .lockup .baj { font-size: .62rem; font-weight: 400; letter-spacing: .34em; color: var(--hoja); line-height: 1; text-transform: uppercase; }
+  @media (prefers-color-scheme: dark) { .lockup .baj { color: #7bcf63; } }
+  :root[data-theme="light"] .lockup .baj { color: var(--hoja); }
+  :root[data-theme="dark"] .lockup .baj { color: #7bcf63; }
+  h1 { font-size: 1.32rem; margin: .9rem 0 .2rem; letter-spacing: -.015em; text-wrap: balance; }
+  .sub { color: var(--mut); font-size: .87rem; max-width: 62ch; }
+
+  .zona {
+    border: 2px dashed var(--bord); border-radius: 10px; padding: 2.2rem 1rem;
+    text-align: center; background: var(--panel); cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .zona:hover, .zona.sobre { border-color: var(--hoja); background: color-mix(in srgb, var(--hoja) 10%, var(--panel)); }
+  .zona strong { display: block; font-size: 1.02rem; margin-bottom: .25rem; }
+  .zona span { color: var(--mut); font-size: .87rem; }
+
+  .cfg { display: flex; flex-wrap: wrap; gap: 1.1rem; align-items: flex-end; margin: 1.25rem 0; }
+  .campo { display: flex; flex-direction: column; gap: .3rem; }
+  /* Mismo recurso que "INMOBILIARIO" en el logo: ligera y muy espaciada. */
+  .campo label { font-size: .69rem; color: var(--mut); font-weight: 500; text-transform: uppercase; letter-spacing: .15em; }
+  select, input[type=number], input[type=text] {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--bord);
+    border-radius: 6px; padding: .45rem .6rem; font: inherit; font-size: .9rem;
+  }
+  button {
+    background: var(--acc); color: var(--acc-fg); border: 0; border-radius: 6px;
+    padding: .55rem 1.1rem; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.sec { background: transparent; color: var(--fg); border: 1px solid var(--bord); }
+
+  .barra { height: 6px; background: var(--bord); border-radius: 3px; overflow: hidden; margin: .6rem 0; }
+  .barra > i { display: block; height: 100%; background: var(--acc); width: 0; transition: width .2s; }
+  .estado { font-size: .87rem; color: var(--mut); min-height: 1.4em; }
+
+  .tarjetas { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1.1rem 0; }
+  .tarjeta { flex: 1 1 130px; border: 1px solid var(--bord); border-radius: 8px; padding: .6rem .8rem; background: var(--panel); }
+  .tarjeta b { display: block; font-size: 1.5rem; line-height: 1.15; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .tarjeta span { font-size: .72rem; color: var(--mut); letter-spacing: .07em; text-transform: uppercase; }
+  /* Filete superior con el color del estado que cuenta la tarjeta. */
+  .tarjeta { border-top: 2px solid var(--bord); }
+  #t-verif { border-top-color: var(--ok); }
+  #t-revisar { border-top-color: var(--warn); }
+  #t-sin { border-top-color: var(--bad); }
+  #t-total { border-top-color: var(--petroleo); }
+
+  .tabla-env { overflow-x: auto; border: 1px solid var(--bord); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: .87rem; }
+  th, td { padding: .5rem .65rem; text-align: left; border-bottom: 1px solid var(--bord); vertical-align: middle; }
+  th { background: var(--panel); font-size: .68rem; font-weight: 500; text-transform: uppercase; letter-spacing: .15em; color: var(--mut); position: sticky; top: 0; }
+  tr:last-child td { border-bottom: 0; }
+  td.orig { color: var(--mut); font-family: ui-monospace, Menlo, monospace; font-size: .8rem; white-space: nowrap; }
+  td input.nom { width: 100%; min-width: 260px; border: 1px solid transparent; background: transparent; border-radius: 4px; padding: .3rem .4rem; font: inherit; color: var(--fg); }
+  td input.nom:hover { border-color: var(--bord); }
+  td input.nom:focus { border-color: var(--acc); outline: none; background: var(--bg); }
+  .etq { display: inline-block; padding: .12rem .5rem; border-radius: 20px; font-size: .74rem; font-weight: 600; white-space: nowrap; }
+  .e-verificado { background: var(--ok-bg); color: var(--ok); }
+  .e-revisar { background: var(--warn-bg); color: var(--warn); }
+  .e-sin-nombre { background: var(--bad-bg); color: var(--bad); }
+  .ver { background: none; border: 0; color: var(--acc); cursor: pointer; font-size: .8rem; padding: 0; text-decoration: underline; }
+  .ocr { font-family: ui-monospace, Menlo, monospace; font-size: .76rem; color: var(--mut); background: var(--panel); padding: .6rem; white-space: pre-wrap; word-break: break-word; }
+  .oculto { display: none !important; }
+  .aviso { border-left: 3px solid var(--acc); background: var(--panel); padding: .7rem .9rem; border-radius: 0 6px 6px 0; font-size: .87rem; margin: 1rem 0; }
+  footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--bord); color: var(--mut); font-size: .8rem; }
+
+  /* Los números de cédula y los totales se comparan en columna: cifras de
+     ancho fijo para que se alineen. */
+  .tarjeta b, td.orig, .ocr { font-variant-numeric: tabular-nums; }
+
+  :is(button, select, input, .ver):focus-visible {
+    outline: 2px solid var(--acc); outline-offset: 2px; border-radius: 4px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+  @media (max-width: 620px) {
+    .env { padding: 1rem .85rem 3rem; }
+    .cfg { gap: .8rem; }
+    .campo { flex: 1 1 8rem; }
+    .tarjeta { flex: 1 1 45%; }
+  }
+</style>
+</head>
+<body>
+<div class="env">
+
+  <header>
+    <div class="marca-env">
+      <svg class="marca" viewBox="0 0 100 100" role="img" aria-label="Grupo Andino Inmobiliario">
+        <defs>
+          <linearGradient id="ga-anillo" x1="0.05" y1="0.05" x2="0.85" y2="0.95">
+            <stop offset="0" stop-color="#74C64B"/>
+            <stop offset="0.5" stop-color="#3DA047"/>
+            <stop offset="1" stop-color="#0B6236"/>
+          </linearGradient>
+          <linearGradient id="ga-barra" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#0E6B3C"/>
+            <stop offset="0.62" stop-color="#116451"/>
+            <stop offset="1" stop-color="#17758A"/>
+          </linearGradient>
+        </defs>
+        <path d="M63 23 A27 27 0 1 0 63 77" fill="none"
+              stroke="url(#ga-anillo)" stroke-width="24"/>
+        <rect x="63" y="13" width="21" height="74" rx="1.5" fill="url(#ga-barra)"/>
+      </svg>
+      <div class="lockup">
+        <span class="nom">GRUPO ANDINO</span>
+        <span class="baj">Inmobiliario</span>
+      </div>
+    </div>
+    <h1>Renombrador de Cupones de Pago</h1>
+    <div class="sub">Los PDF se procesan en este computador y no se envían a ningún servidor.</div>
+  </header>
+
+  <div class="zona" id="zona">
+    <strong>Arrastra aquí los PDF de los cupones</strong>
+    <span>o haz clic para seleccionarlos</span>
+    <input type="file" id="entrada" accept="application/pdf,.pdf" multiple hidden>
+  </div>
+
+  <div class="cfg">
+    <div class="campo">
+      <label for="mes">Mes (si el archivo no lo trae)</label>
+      <select id="mes"></select>
+    </div>
+    <div class="campo">
+      <label for="anio">Año</label>
+      <input type="text" id="anio" size="6" inputmode="numeric" maxlength="4">
+    </div>
+    <div class="campo">
+      <label for="hilos">Procesos en paralelo</label>
+      <select id="hilos"></select>
+    </div>
+    <div class="campo">
+      <label for="dpi">Resolución</label>
+      <select id="dpi">
+        <option value="300" selected>300 dpi (recomendado)</option>
+        <option value="220">220 dpi (más rápido)</option>
+        <option value="400">400 dpi (más lento)</option>
+      </select>
+    </div>
+    <button id="procesar" disabled>Procesar</button>
+    <button id="cancelar" class="sec oculto">Cancelar</button>
+  </div>
+
+  <div class="aviso" id="avisoFecha">
+    El mes y el año se toman automáticamente del nombre de cada archivo
+    (<code>280_10432871_08_2026.pdf</code> → agosto 2026). Los de arriba solo se usan
+    para archivos que no siguen ese formato.
+  </div>
+
+  <div class="barra oculto" id="barra"><i></i></div>
+  <div class="estado" id="estado"></div>
+
+  <div class="tarjetas oculto" id="tarjetas">
+    <div class="tarjeta" id="t-total"><b id="cTotal">0</b><span>Archivos</span></div>
+    <div class="tarjeta" id="t-verif"><b id="cVerif">0</b><span>Verificados por cédula/NIT</span></div>
+    <div class="tarjeta" id="t-revisar"><b id="cRevisar">0</b><span>Revisar</span></div>
+    <div class="tarjeta" id="t-sin"><b id="cSin">0</b><span>Sin nombre</span></div>
+  </div>
+
+  <div class="cfg oculto" id="acciones">
+    <button id="descargar">Descargar ZIP renombrado</button>
+    <button id="guardarCarpeta" class="sec oculto">Guardar en una carpeta…</button>
+    <button id="descargarCsv" class="sec">Descargar solo el CSV</button>
+    <button id="limpiar" class="sec">Empezar de nuevo</button>
+  </div>
+
+  <div class="tabla-env oculto" id="tablaEnv">
+    <table>
+      <thead>
+        <tr>
+          <th>Archivo original</th>
+          <th>Nombre detectado (editable)</th>
+          <th>Periodo</th>
+          <th>Estado</th>
+          <th>OCR</th>
+        </tr>
+      </thead>
+      <tbody id="cuerpo"></tbody>
+    </table>
+  </div>
+
+  <footer>
+    Reconocimiento de texto con Tesseract (español) y pdf.js, ambos ejecutándose dentro del navegador.
+  </footer>
+</div>
+
+<script src="vendor/pdf.min.js"></script>
+<script src="vendor/tesseract.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="js/extract.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

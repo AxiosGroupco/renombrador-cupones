@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Pruebas — extracción de nombres</title>
+<style>
+  body { font: 13px/1.5 ui-monospace, Menlo, monospace; margin: 2rem; max-width: 1100px; }
+  h2 { font-size: 15px; margin-top: 2rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  td, th { border: 1px solid #ccc; padding: 3px 6px; text-align: left; vertical-align: top; }
+  .ok { color: #0a0; } .bad { color: #c00; } .warn { color: #b60; }
+  pre { background: #f5f5f5; padding: .6rem; overflow-x: auto; }
+</style>
+</head>
+<body>
+<h1>Pruebas contra 933 textos OCR reales</h1>
+<div id="salida">Ejecutando…</div>
+
+<script src="../js/extract.js"></script>
+<script>
+// fixtures.js son los textos OCR reales del log: tiene nombres y cédulas de
+// arrendatarios, así que no se versiona. Si no está, se usan los anónimos.
+window.__FUENTE__ = new Promise(res => {
+  const real = document.createElement('script');
+  real.src = 'fixtures.js';
+  real.onload = () => res('reales (fixtures.js)');
+  real.onerror = () => {
+    const anon = document.createElement('script');
+    anon.src = 'fixtures-anon.js';
+    anon.onload = () => res('anónimos (fixtures-anon.js)');
+    anon.onerror = () => res(null);
+    document.head.appendChild(anon);
+  };
+  document.head.appendChild(real);
+});
+</script>
+<script>
+window.__FUENTE__.then(function (fuente) {
+  if (!fuente) {
+    document.getElementById('salida').textContent =
+      'No se encontró ni fixtures.js ni fixtures-anon.js.';
+    return;
+  }
+  const F = window.FIXTURES;
+  const E = window.Extract;
+  const res = {
+    total: F.length,
+    nuevoOk: 0, viejoOk: 0,
+    ganados: [], perdidos: [], corregidos: [], distintos: [],
+    porMetodo: {}, verificados: 0, revisar: 0,
+  };
+
+  for (const c of F) {
+    const r = E.procesar(c.ocr, c.archivo, null, null);
+    const nuevoNombre = r.nombre;
+
+    // Lo que el .exe produjo, deducido del nombre de archivo final
+    let viejoNombre = null;
+    if (c.viejo) {
+      const m = c.viejo.match(/^CUPON DE PAGO (.+?)(?:_\d+)? [A-ZÁÉÍÓÚÑ]+ \d{4}\.pdf$/);
+      viejoNombre = m ? m[1] : c.viejo.replace(/\.pdf$/, '');
+    }
+
+    if (nuevoNombre) res.nuevoOk++;
+    if (viejoNombre) res.viejoOk++;
+    if (r.estado === 'verificado') res.verificados++;
+    if (r.estado === 'revisar') res.revisar++;
+    if (r.metodo) res.porMetodo[r.metodo] = (res.porMetodo[r.metodo] || 0) + 1;
+
+    if (nuevoNombre && !viejoNombre) res.ganados.push([c.archivo, nuevoNombre, r.estado]);
+    if (!nuevoNombre && viejoNombre) res.perdidos.push([c.archivo, viejoNombre, c.ocr.slice(0, 150)]);
+    if (nuevoNombre && viejoNombre && nuevoNombre !== viejoNombre) {
+      // ¿el viejo traía el prefijo basura?
+      if (/^(CUPON )?DE PAGO |^PAGO /.test(viejoNombre)) res.corregidos.push([viejoNombre, nuevoNombre]);
+      else res.distintos.push([c.archivo, viejoNombre, nuevoNombre]);
+    }
+  }
+
+  const pct = n => (100 * n / res.total).toFixed(1) + '%';
+  const esc = s => String(s).replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
+  const tabla = (rows, cab) => '<table><tr>' + cab.map(h => '<th>' + h + '</th>').join('') + '</tr>' +
+    rows.map(r => '<tr>' + r.map(c => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</table>';
+
+  let h = '';
+  h += '<h2>Resumen</h2><pre>';
+  h += 'Datos                  : ' + fuente + '\n';
+  h += 'Casos evaluados        : ' + res.total + '\n';
+  h += 'Extraídos por el .exe  : ' + res.viejoOk + '  (' + pct(res.viejoOk) + ')\n';
+  h += 'Extraídos por el nuevo : ' + res.nuevoOk + '  (' + pct(res.nuevoOk) + ')\n';
+  h += '\n';
+  h += 'Verificados por NIT    : ' + res.verificados + '  (' + pct(res.verificados) + ')\n';
+  h += 'Requieren revisión     : ' + res.revisar + '\n';
+  h += '\n';
+  h += 'Método usado           : ' + JSON.stringify(res.porMetodo) + '\n';
+  h += '\n';
+  h += 'Recuperados (el .exe fallaba) : ' + res.ganados.length + '\n';
+  h += 'Perdidos (regresión)          : ' + res.perdidos.length + '\n';
+  h += 'Prefijo basura corregido      : ' + res.corregidos.length + '\n';
+  h += 'Otras diferencias             : ' + res.distintos.length + '\n';
+  h += '</pre>';
+
+  h += '<h2 class="ok">Recuperados: ' + res.ganados.length + '</h2>';
+  h += tabla(res.ganados.slice(0, 40), ['archivo', 'nombre nuevo', 'estado']);
+
+  h += '<h2 class="bad">Regresiones: ' + res.perdidos.length + '</h2>';
+  h += res.perdidos.length ? tabla(res.perdidos.slice(0, 40), ['archivo', 'nombre viejo', 'ocr']) : '<p>Ninguna.</p>';
+
+  h += '<h2 class="warn">Prefijo corregido: ' + res.corregidos.length + '</h2>';
+  const cu = [...new Map(res.corregidos.map(r => [r[0], r])).values()];
+  h += tabla(cu.slice(0, 30), ['antes (.exe)', 'ahora']);
+
+  h += '<h2>Otras diferencias: ' + res.distintos.length + '</h2>';
+  h += res.distintos.length ? tabla(res.distintos.slice(0, 40), ['archivo', 'viejo', 'nuevo']) : '<p>Ninguna.</p>';
+
+  document.getElementById('salida').innerHTML = h;
+  window.__RESUMEN__ = res;
+});
+</script>
+</body>
+</html>
