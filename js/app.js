@@ -39,8 +39,74 @@
   const srcTessWorker = empotrado('emp-tess-worker');
   const b64Spa = empotrado('emp-tess-spa');
 
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    srcPdfWorker ? urlBlob(srcPdfWorker) : abs('vendor/pdf.worker.min.js');
+  /* --------------------------------------------------------------------- */
+  /* Workers: disponibles o no                                              */
+  /*                                                                        */
+  /* Abierta con doble clic (file://) la página queda en origen opaco y los  */
+  /* navegadores bloquean los workers creados desde un blob. En vez de       */
+  /* suponerlo, se comprueba al arrancar y la app se adapta.                 */
+  /* --------------------------------------------------------------------- */
+
+  let _hayWorkers = null;
+
+  function hayWorkers() {
+    if (_hayWorkers !== null) return _hayWorkers;
+    _hayWorkers = new Promise(res => {
+      // ?sinworkers=1 fuerza el modo degradado, para poder probarlo.
+      if (/[?&]sinworkers=1/.test(location.search)) return res(false);
+      let url = null;
+      try {
+        const b = new Blob(['self.onmessage=()=>self.postMessage(1)'], { type: 'text/javascript' });
+        url = URL.createObjectURL(b);
+        const w = new Worker(url);
+        const cerrar = ok => {
+          clearTimeout(t); try { w.terminate(); } catch (e) { /* nada */ }
+          if (url) URL.revokeObjectURL(url);
+          res(ok);
+        };
+        const t = setTimeout(() => cerrar(false), 4000);
+        w.onmessage = () => cerrar(true);
+        w.onerror = () => cerrar(false);
+        w.postMessage(1);
+      } catch (e) {
+        if (url) URL.revokeObjectURL(url);
+        res(false);
+      }
+    });
+    return _hayWorkers;
+  }
+
+  /**
+   * Prepara pdf.js. Sin workers no se rinde: si `globalThis.pdfjsWorker` ya
+   * está definido, pdf.js ni intenta crear un Worker y usa ese manejador en
+   * el hilo principal. Basta con evaluar aquí el código del worker —es un
+   * UMD que se auto-registra, y solo se auto-arranca cuando no existe
+   * `window`, así que en la página es inofensivo.
+   */
+  let _pdfListo = null;
+  function prepararPdf() {
+    if (_pdfListo) return _pdfListo;
+    _pdfListo = (async () => {
+      if (await hayWorkers()) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          srcPdfWorker ? urlBlob(srcPdfWorker) : abs('vendor/pdf.worker.min.js');
+        return 'worker';
+      }
+      let fuente = srcPdfWorker;
+      if (!fuente) {
+        try { fuente = await (await fetch(abs('vendor/pdf.worker.min.js'))).text(); }
+        catch (e) { fuente = null; }
+      }
+      if (fuente) {
+        (0, eval)(fuente);                       // define globalThis.pdfjsWorker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+        return 'hilo-principal';
+      }
+      pdfjsLib.GlobalWorkerOptions.workerSrc = abs('vendor/pdf.worker.min.js');
+      return 'worker';
+    })();
+    return _pdfListo;
+  }
 
   // En el archivo único, el núcleo WASM va concatenado dentro del worker, así
   // que Tesseract encuentra TesseractCore ya definido y no descarga nada.
@@ -242,7 +308,13 @@
       }
     }
 
-    // 2. OCR sobre la página rasterizada.
+    // 2. OCR sobre la página rasterizada. Requiere workers sí o sí: Tesseract
+    //    no tiene modo de hilo principal.
+    if (!(await hayWorkers())) {
+      const r = armar(ultimoTexto, fuente);
+      r.sinOcr = true;
+      return r;
+    }
     const scheduler = await obtenerScheduler();
     for (let p = 1; p <= maxPag; p++) {
       const canvas = preprocesar(await renderizarPagina(pdf, p, cfg.dpi));
@@ -301,6 +373,25 @@
   }
 
   function estado(msg) { $('estado').textContent = msg; }
+
+  /**
+   * Sin workers (típico al abrir el archivo con doble clic) la lectura de la
+   * capa de texto funciona igual, pero el OCR no: Tesseract no puede correr
+   * fuera de un worker. Conviene decirlo antes de que el usuario piense que
+   * la herramienta falló.
+   */
+  function avisarSinWorkers() {
+    if ($('sinWorkers')) return;
+    const d = document.createElement('p');
+    d.id = 'sinWorkers';
+    d.className = 'aviso-degradado';
+    d.textContent = 'Este navegador bloqueó el reconocimiento de imagen al abrir el '
+      + 'archivo desde el disco. Los cupones que traen el texto adentro se procesan '
+      + 'igual de bien; los que no, quedarán como «Sin nombre». Si necesitas el '
+      + 'reconocimiento, prueba a abrir este mismo archivo con Firefox, que suele '
+      + 'permitirlo.';
+    $('estado').after(d);
+  }
 
   /**
    * El avance se dibuja sobre el anillo de la marca: el círculo lleva
@@ -487,6 +578,9 @@
 
     const t0 = performance.now();
     try {
+      const via = await prepararPdf();
+      const conWorkers = await hayWorkers();
+      if (!conWorkers) avisarSinWorkers();
       const total = S.archivos.length;
       let hechos = 0;
 
