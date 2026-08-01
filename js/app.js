@@ -67,7 +67,56 @@
   };
 
   /* --------------------------------------------------------------------- */
-  /* Imagen: render + preprocesado                                          */
+  /* Capa de texto: la vía rápida                                           */
+  /* --------------------------------------------------------------------- */
+
+  /**
+   * Devuelve el texto embebido de una página, si el PDF lo trae.
+   *
+   * El .exe rasterizaba cada página a 300 dpi y le pasaba OCR encima, sin
+   * comprobar si el PDF ya tenía el texto adentro. Cuando lo tiene, leerlo
+   * es unas doscientas veces más rápido y además exacto: se acaban los
+   * "90094.1454-2" y los "REFA" que ensuciaban el log.
+   *
+   * pdf.js entrega fragmentos sueltos con su posición; hay que decidir dónde
+   * van los espacios o "PONTON" se pega con lo que sigue.
+   */
+  async function leerCapaTexto(pdf, numPagina) {
+    const pagina = await pdf.getPage(numPagina);
+    const contenido = await pagina.getTextContent();
+    let salida = '';
+    let finPrevio = null, yPrevio = null;
+
+    for (const it of contenido.items) {
+      if (typeof it.str !== 'string') continue;
+      const x = it.transform[4];
+      const y = it.transform[5];
+      const alto = Math.abs(it.transform[3]) || 10;
+
+      if (yPrevio !== null) {
+        if (Math.abs(y - yPrevio) > alto * 0.5) salida += ' ';        // otro renglón
+        else if (x - finPrevio > alto * 0.22) salida += ' ';          // hueco entre palabras
+      }
+      salida += it.str;
+      finPrevio = x + (it.width || 0);
+      yPrevio = y;
+      if (it.hasEOL) { salida += ' '; yPrevio = null; }
+    }
+    return salida;
+  }
+
+  /**
+   * ¿Sirve la capa de texto? Un PDF escaneado suele traerla vacía, o con
+   * cuatro caracteres sueltos de algún sello. Se exige algo de cuerpo y la
+   * palabra sobre la que se ancla la extracción.
+   */
+  function capaUtil(t) {
+    const n = E.normalizarTexto(t);
+    return n.length >= 80 && n.indexOf('NIT') !== -1;
+  }
+
+  /* --------------------------------------------------------------------- */
+  /* Imagen: render + preprocesado (respaldo por OCR)                       */
   /* --------------------------------------------------------------------- */
 
   /** Dibuja una página del PDF en un canvas a los dpi indicados. */
@@ -161,25 +210,51 @@
   /* Procesamiento de un archivo                                            */
   /* --------------------------------------------------------------------- */
 
-  async function procesarArchivo(file, cfg, scheduler) {
+  /**
+   * @param obtenerScheduler función perezosa: el motor OCR solo se carga si
+   *        algún archivo lo necesita de verdad. Si todos los cupones traen
+   *        capa de texto, nunca se descargan los 9 MB del reconocedor.
+   */
+  async function procesarArchivo(file, cfg, obtenerScheduler) {
     const buf = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     const maxPag = Math.min(pdf.numPages, 3);   // los cupones son de 1 página
     let ultimoTexto = '';
+    let fuente = null;
 
+    const armar = (texto, f) => {
+      const r = E.procesar(texto, file.name, cfg.mes, cfg.anio);
+      r.texto = texto;
+      r.fuente = f;
+      r.file = file;
+      return r;
+    };
+
+    // 1. Capa de texto: instantánea y exacta cuando el PDF la trae.
+    if (cfg.modo === 'auto') {
+      for (let p = 1; p <= maxPag; p++) {
+        const t = await leerCapaTexto(pdf, p);
+        if (!capaUtil(t)) continue;
+        ultimoTexto = t;
+        fuente = 'texto';
+        const r = armar(t, 'texto');
+        if (r.nombre) return r;
+      }
+    }
+
+    // 2. OCR sobre la página rasterizada.
+    const scheduler = await obtenerScheduler();
     for (let p = 1; p <= maxPag; p++) {
       const canvas = preprocesar(await renderizarPagina(pdf, p, cfg.dpi));
       const { data } = await scheduler.addJob('recognize', canvas);
       canvas.width = canvas.height = 0;         // liberar memoria
       ultimoTexto = data.text || '';
-      const r = E.procesar(ultimoTexto, file.name, cfg.mes, cfg.anio);
-      if (r.nombre) { r.texto = ultimoTexto; r.file = file; return r; }
+      fuente = 'ocr';
+      const r = armar(ultimoTexto, 'ocr');
+      if (r.nombre) return r;
     }
 
-    const r = E.procesar(ultimoTexto, file.name, cfg.mes, cfg.anio);
-    r.texto = ultimoTexto;
-    r.file = file;
-    return r;
+    return armar(ultimoTexto, fuente);
   }
 
   /** Evita que dos cupones distintos terminen con el mismo nombre. */
@@ -286,6 +361,19 @@
     if (f.estado === 'revisar') etq.title = 'No se pudo confirmar contra la cédula/NIT del nombre del archivo';
     tdE.appendChild(etq);
 
+    const tdF = document.createElement('td');
+    if (f.fuente) {
+      const et = document.createElement('span');
+      et.className = 'etq ' + (f.fuente === 'texto' ? 'e-texto' : 'e-ocr');
+      et.textContent = f.fuente === 'texto' ? 'Texto' : 'OCR';
+      et.title = f.fuente === 'texto'
+        ? 'El PDF traía el texto adentro: lectura exacta, sin reconocimiento'
+        : 'Sin capa de texto: se reconoció la imagen de la página';
+      tdF.appendChild(et);
+    } else {
+      tdF.textContent = '—';
+    }
+
     const tdV = document.createElement('td');
     const btn = document.createElement('button');
     btn.className = 'ver'; btn.textContent = 'ver';
@@ -295,14 +383,14 @@
       const trO = document.createElement('tr');
       trO.className = 'fila-ocr';
       const td = document.createElement('td');
-      td.colSpan = 5; td.className = 'ocr';
+      td.colSpan = 6; td.className = 'ocr';
       td.textContent = f.texto || '(sin texto)';
       trO.appendChild(td);
       tr.after(trO);
     });
     tdV.appendChild(btn);
 
-    tr.append(tdO, tdN, tdP, tdE, tdV);
+    tr.append(tdO, tdN, tdP, tdE, tdF, tdV);
     return tr;
   }
 
@@ -328,6 +416,7 @@
       mes: $('mes').value,
       anio: $('anio').value.trim(),
       dpi: parseInt($('dpi').value, 10),
+      modo: $('modo').value,
     };
     const nHilos = parseInt($('hilos').value, 10);
 
@@ -335,9 +424,16 @@
     pintarTabla();
     pintarResumen();
 
+    // El motor OCR se carga la primera vez que algún archivo lo pida. Si todos
+    // traen capa de texto, no se descarga nunca.
+    let promesaOcr = null;
+    const obtenerScheduler = () => {
+      if (!promesaOcr) promesaOcr = iniciarOcr(nHilos, estado);
+      return promesaOcr;
+    };
+
     const t0 = performance.now();
     try {
-      const scheduler = await iniciarOcr(nHilos, estado);
       const total = S.archivos.length;
       let hechos = 0;
 
@@ -351,11 +447,11 @@
       const lanzar = () => {
         if (S.cancelado || !cola.length) return null;
         const file = cola.shift();
-        const p = procesarArchivo(file, cfg, scheduler)
+        const p = procesarArchivo(file, cfg, obtenerScheduler)
           .catch(err => ({
             original: file.name, nombre: null, metodo: null,
             mes: cfg.mes, anio: cfg.anio, estado: 'sin-nombre',
-            origenFecha: 'manual', nuevoNombre: null,
+            origenFecha: 'manual', nuevoNombre: null, fuente: null,
             texto: 'Error: ' + (err && err.message ? err.message : err), file,
           }))
           .then(r => {
@@ -387,9 +483,14 @@
       pintarTabla();
       pintarResumen();
       const seg = ((performance.now() - t0) / 1000).toFixed(0);
+      const porTexto = S.filas.filter(f => f.fuente === 'texto').length;
+      const porOcr = S.filas.filter(f => f.fuente === 'ocr').length;
+      const desglose = porTexto && porOcr
+        ? ` (${porTexto} por capa de texto, ${porOcr} por OCR)`
+        : porTexto ? ' (todos por capa de texto, sin OCR)' : '';
       estado(S.cancelado
         ? `Cancelado. Se alcanzaron a procesar ${hechos} de ${total}.`
-        : `Listo: ${total} archivos en ${seg}s. Revisa los nombres y descarga el ZIP.`);
+        : `Listo: ${total} archivos en ${seg}s${desglose}. Revisa los nombres y descarga el ZIP.`);
     } catch (err) {
       estado('Error: ' + (err && err.message ? err.message : err));
       console.error(err);
@@ -408,12 +509,15 @@
   function construirCsv() {
     const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     const filas = [['Archivo original', 'Nuevo nombre', 'Nombre detectado', 'Periodo',
-      'Estado', 'Metodo', 'Editado a mano', 'Documento en el archivo', 'Documento leido']];
+      'Estado', 'Lectura', 'Metodo', 'Editado a mano', 'Documento en el archivo',
+      'Documento leido']];
     for (const f of S.filas) {
       filas.push([
         f.original, f.nuevoNombre || '-', f.nombre || '-',
         f.mes ? `${f.mes} ${f.anio}` : '-',
-        ETIQUETA[f.estado], f.metodo || '-', f.editado ? 'si' : 'no',
+        ETIQUETA[f.estado],
+        f.fuente === 'texto' ? 'texto del PDF' : f.fuente === 'ocr' ? 'OCR' : '-',
+        f.metodo || '-', f.editado ? 'si' : 'no',
         f.documentoArchivo || '-', (f.documentosTexto || []).join(' / ') || '-',
       ]);
     }

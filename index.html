@@ -118,6 +118,9 @@
   .e-verificado { background: var(--ok-bg); color: var(--ok); }
   .e-revisar { background: var(--warn-bg); color: var(--warn); }
   .e-sin-nombre { background: var(--bad-bg); color: var(--bad); }
+  /* Cómo se leyó el PDF: no es un estado, así que va en gris y sin relleno. */
+  .e-texto, .e-ocr { border: 1px solid var(--bord); color: var(--mut); font-weight: 500; }
+  .e-texto { border-color: color-mix(in srgb, var(--petroleo) 45%, var(--bord)); }
   .ver { background: none; border: 0; color: var(--acc); cursor: pointer; font-size: .8rem; padding: 0; text-decoration: underline; }
   .ocr { font-family: ui-monospace, Menlo, monospace; font-size: .76rem; color: var(--mut); background: var(--panel); padding: .6rem; white-space: pre-wrap; word-break: break-word; }
   .oculto { display: none !important; }
@@ -193,7 +196,14 @@
       <select id="hilos"></select>
     </div>
     <div class="campo">
-      <label for="dpi">Resolución</label>
+      <label for="modo">Cómo leer los PDF</label>
+      <select id="modo">
+        <option value="auto" selected>Texto del PDF, y OCR si no lo trae</option>
+        <option value="ocr">Solo OCR</option>
+      </select>
+    </div>
+    <div class="campo">
+      <label for="dpi">Resolución del OCR</label>
       <select id="dpi">
         <option value="300" selected>300 dpi (recomendado)</option>
         <option value="220">220 dpi (más rápido)</option>
@@ -235,7 +245,8 @@
           <th>Nombre detectado (editable)</th>
           <th>Periodo</th>
           <th>Estado</th>
-          <th>OCR</th>
+          <th>Lectura</th>
+          <th>Texto</th>
         </tr>
       </thead>
       <tbody id="cuerpo"></tbody>

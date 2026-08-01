@@ -17,8 +17,27 @@ hay nada que instalar en el computador (ni poppler ni Tesseract).
 5. **Descargar ZIP renombrado** (o **Guardar en una carpeta…** en Chrome/Edge,
    que escribe los archivos directamente donde elijas).
 
-La primera vez, el navegador descarga ~9 MB del motor de reconocimiento. Después
-queda en caché y ya no se vuelve a bajar.
+### Cómo lee los PDF
+
+Muchos PDF generados por computador ya traen el texto adentro. Cuando es así,
+leerlo es instantáneo y exacto. Solo cuando no hay texto —un escaneo, por
+ejemplo— hace falta reconocer la imagen, que es lento y se equivoca.
+
+El `.exe` rasterizaba **todas** las páginas a 300 dpi y les pasaba OCR encima,
+sin comprobar antes si había texto. De ahí salían los `90094.1454-2` y los
+`REFA` en vez de `REF1` que ensucian su log.
+
+Por defecto (**Texto del PDF, y OCR si no lo trae**) se intenta primero la vía
+rápida y solo se cae al OCR archivo por archivo cuando hace falta. La columna
+**Lectura** de la tabla dice cuál se usó en cada uno.
+
+Si todos los cupones traen texto, el motor de reconocimiento **ni siquiera se
+descarga**: se ahorran los ~9 MB y la espera de la primera carga. Cuando sí se
+necesita, se baja una vez y queda en caché.
+
+La opción **Solo OCR** fuerza el reconocimiento. Sirve si algún PDF trae una
+capa de texto defectuosa —cosa que pasa con ciertos generadores— y conviene
+ignorarla.
 
 ### Mes y año
 
@@ -209,10 +228,17 @@ cuatro casos que el `.exe` no podía procesar.
 Medido sobre el log real: ~110 cupones por corrida, una página por PDF, 2,1 s por
 archivo en el `.exe` nativo.
 
-En el navegador, con 4 procesos en paralelo a 300 dpi, un lote de 110 archivos
-toma alrededor de 3 minutos. Si hace falta más velocidad, bajar a 220 dpi en
-**Resolución** ayuda bastante; conviene revisar que la calidad se mantenga antes
-de dejarlo fijo.
+| Vía | Por archivo | Lote de 110 | Motor OCR |
+|---|---|---|---|
+| Capa de texto | ~0,2 s | **menos de medio minuto** | no se descarga |
+| OCR, 4 procesos a 300 dpi | ~3 s | ~3 minutos | ~9 MB la primera vez |
 
-El número de procesos en paralelo se sugiere según el computador. Subirlo mucho
-en una máquina modesta puede ser contraproducente.
+Cuál aplica depende de si los cupones traen texto embebido. **Esto está sin
+confirmar contra los cupones reales**: los PDF de prueba de este repositorio sí
+lo traen, pero se generaron aquí. La primera corrida con archivos de verdad lo
+resuelve — la columna **Lectura** lo dice archivo por archivo.
+
+Si toca ir por OCR y hace falta más velocidad, bajar a 220 dpi en **Resolución
+del OCR** ayuda bastante; conviene revisar que la calidad se mantenga antes de
+dejarlo fijo. El número de procesos en paralelo se sugiere según el computador;
+subirlo mucho en una máquina modesta puede ser contraproducente.
