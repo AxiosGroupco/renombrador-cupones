@@ -17,6 +17,19 @@
     'NIT', 'INMUEBLE', 'NUMERO', 'NÚMERO', 'TOTAL', 'VALOR',
   ]);
 
+  /**
+   * Palabras que nunca forman parte del nombre de un arrendatario y que
+   * descalifican al candidato entero.
+   *
+   * El cupón lleva al pie "IMPRESO CON SOFTWARE ORBIS. DGI S.A.S. NIT:
+   * 804.003.384". En la capa de texto ese pie aparece a veces ANTES del
+   * nombre, así que una búsqueda que se quede con la primera coincidencia
+   * termina bautizando el archivo con el nombre de la imprenta.
+   */
+  const RUIDO = new Set([
+    'IMPRESO', 'SOFTWARE', 'ORBIS', 'DGI', 'CANCELE', 'HASTA',
+  ]);
+
   const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO',
     'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
 
@@ -85,6 +98,7 @@
     if (!cad) return false;
     const tokens = cad.split(/\s+/).filter(Boolean);
     if (tokens.length < 2) return false;
+    if (tokens.some(t => RUIDO.has(t.replace(/\./g, '')))) return false;
     if (tokens.every(t => STOPWORDS.has(t.replace(/\./g, '')))) return false;
     return cad.replace(/\s/g, '').length >= 5;
   }
@@ -112,7 +126,31 @@
   }
 
   /**
-   * 2. Lookahead (la del .exe), con los tokens siguientes relajados a 1+
+   * 2. Encabezado de la capa de texto.
+   *
+   * Cuando el nombre sale del texto embebido del PDF (no del OCR), el
+   * documento empieza directamente por el arrendatario, pegado a su cédula
+   * y a NIT:
+   *
+   *     LOZANO SIERRA ALBA MERCEDES 28229113NIT: 28229113 15744958 DIAG 19…
+   *
+   * Anclar al principio es mucho más seguro que buscar la primera
+   * coincidencia en todo el documento, que es lo que hacía que en algunos
+   * cupones ganara el pie de imprenta.
+   *
+   * Sobre texto de OCR no dispara: allí el documento abre con el membrete
+   * del banco y antes del primer NIT no hay cifras.
+   */
+  function porEncabezado(texto) {
+    const re = new RegExp('^\\s*([' + LETRA + '][' + LETRA + '.\\s]{4,70}?)\\s*\\d{6,}\\s*NIT\\b');
+    const m = texto.match(re);
+    if (!m) return null;
+    const cand = limpiarCandidato(m[1]);
+    return esNombreValido(cand) ? cand : null;
+  }
+
+  /**
+   * 3. Lookahead (la del .exe), con los tokens siguientes relajados a 1+
    *    caracteres y admitiendo puntos, para no cortar en "S.A.S".
    */
   function porLookahead(texto) {
@@ -125,7 +163,7 @@
     return esNombreValido(cand) ? cand : null;
   }
 
-  /** 3. Última secuencia de palabras en mayúsculas antes del primer NIT. */
+  /** 4. Última secuencia de palabras en mayúsculas antes del primer NIT. */
   function porRetroceso(texto) {
     const idx = texto.indexOf('NIT');
     if (idx === -1) return null;
@@ -137,7 +175,7 @@
     return esNombreValido(cand) ? cand : null;
   }
 
-  /** 4. Heurística: el candidato válido más cercano por delante de un NIT. */
+  /** 5. Heurística: el candidato válido más cercano por delante de un NIT. */
   function porHeuristica(texto) {
     const nitIdx = texto.indexOf('NIT');
     if (nitIdx === -1) return null;
@@ -157,6 +195,7 @@
 
   const ESTRATEGIAS = [
     ['anclaje', porAnclaje],
+    ['encabezado', porEncabezado],
     ['lookahead', porLookahead],
     ['retroceso', porRetroceso],
     ['heuristica', porHeuristica],
@@ -270,9 +309,9 @@
   }
 
   return {
-    STOPWORDS, MESES,
+    STOPWORDS, RUIDO, MESES,
     normalizarTexto, limpiarCandidato, esNombreValido,
-    porAnclaje, porLookahead, porRetroceso, porHeuristica,
+    porAnclaje, porEncabezado, porLookahead, porRetroceso, porHeuristica,
     extraerNombre, documentosEnTexto, metadatosDeNombre,
     sanitizarNombreArchivo, construirNombreArchivo, procesar,
   };
