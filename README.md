@@ -144,6 +144,33 @@ para dejarla abierta al público.
 
 ---
 
+## Sobre el aspecto
+
+La herramienta es **blanca siempre**. No sigue la preferencia de tema del
+sistema ni el conmutador del visor: es una decisión, no un olvido. Los tokens
+de color viven en `:root` y las variantes `data-theme` apuntan a los mismos
+valores, con `color-scheme: light` para que el navegador tampoco oscurezca sus
+propios controles.
+
+Sobre blanco la estructura no viene de bloques rellenos sino de filetes de un
+píxel y de la tipografía. Los tres colores del logo —muestreados del archivo,
+no estimados— se reparten papeles distintos:
+
+| Color | | Para qué |
+|---|---|---|
+| Bosque | `#00683f` | lo que se pulsa: botones y foco |
+| Lima | `#8ed716` | lo que salió bien: verificado y el avance |
+| Petróleo | `#00687d` | lo que pide una mirada: «revisar» |
+
+El único color ajeno a la marca es el rojo de «sin nombre»: un error debe
+distinguirse de un aviso a simple vista.
+
+El logo va incrustado como data URI desde el archivo original. Lo único que se
+le hizo fue recortar el margen transparente sobrante y reescalarlo; el dibujo
+no se toca. Para cambiarlo: `python3 incrustar-logo.py ruta/al/logo.svg`.
+
+---
+
 ## Estructura
 
 ```

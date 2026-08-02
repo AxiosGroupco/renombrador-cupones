@@ -31,18 +31,8 @@
     --bad: #a8321f; --bad-bg: #fbeeeb;
     --sombra: none;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0e1311; --fg: #e7ece9; --mut: #93a099;
-      --bord: #222a26; --bord-fuerte: #35403a;
-      --panel: #141a17; --acc: #6cc44a; --acc-fg: #08130d;
-      --ok: #7bcf63; --ok-bg: #12240f;
-      --warn: #57b6c4; --warn-bg: #0e2226;
-      --bad: #f08a7a; --bad-bg: #2b1a17;
-      --sombra: none;
-    }
-  }
-  :root[data-theme="light"] {
+  :root[data-theme="light"],
+  :root[data-theme="dark"] {
     --bg: #ffffff; --fg: #14201a; --mut: #6b756e;
     --bord: #e7eae8; --bord-fuerte: #cfd6d1;
     --panel: #fafbfa; --acc: #00683f; --acc-fg: #ffffff;
@@ -51,15 +41,10 @@
     --bad: #a8321f; --bad-bg: #fbeeeb;
     --sombra: none;
   }
-  :root[data-theme="dark"] {
-    --bg: #0e1311; --fg: #e7ece9; --mut: #93a099;
-    --bord: #222a26; --bord-fuerte: #35403a;
-    --panel: #141a17; --acc: #6cc44a; --acc-fg: #08130d;
-    --ok: #7bcf63; --ok-bg: #12240f;
-    --warn: #57b6c4; --warn-bg: #0e2226;
-    --bad: #f08a7a; --bad-bg: #2b1a17;
-    --sombra: none;
-  }
+
+  /* La página es blanca siempre; que el navegador no oscurezca sus propios
+     controles ni las barras de desplazamiento. */
+  :root { color-scheme: light; }
 
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -84,15 +69,6 @@
      palabra "INMOBILIARIO" deja de leerse. */
   .marca { height: 72px; width: auto; flex: none; display: block; }
 
-  /* La marca está dibujada en verde bosque, pensada para fondo claro. En
-     tema oscuro no se filtra ni se recolorea —eso sería alterarla—: se le
-     da el fondo blanco para el que fue diseñada. */
-  .marca-caja { display: inline-flex; border-radius: 10px; padding: 0; }
-  :root[data-theme="dark"] .marca-caja { background: #fff; padding: .45rem .7rem; }
-  @media (prefers-color-scheme: dark) { .marca-caja { background: #fff; padding: .45rem .7rem; } }
-  :root[data-theme="light"] .marca-caja { background: transparent; padding: 0; }
-  :root[data-theme="dark"]
-  @media (prefers-color-scheme: dark) { }
   header .tit { margin-left: auto; text-align: right; }
   header .tit b { display: block; font-size: 1.02rem; font-weight: 700; letter-spacing: -.01em; }
   header .tit span { font-size: .78rem; color: var(--mut); }
@@ -139,8 +115,6 @@
   .zona.trabajando .anillo .avance { opacity: 1; }
   .anillo .hoja-icono { stroke: var(--bosque); transition: opacity .3s; }
   .zona.trabajando .anillo .hoja-icono { opacity: .3; }
-  :root[data-theme="dark"] .anillo .hoja-icono { stroke: var(--lima); }
-  @media (prefers-color-scheme: dark) { .anillo .hoja-icono { stroke: var(--lima); } }
 
   .cuenta { font-size: 1.9rem; font-weight: 800; letter-spacing: -.03em;
             font-variant-numeric: tabular-nums; line-height: 1; }
@@ -250,7 +224,8 @@
   .ver { background: none; border: 0; color: var(--acc); cursor: pointer;
          font-size: .79rem; padding: 0; text-decoration: underline; font-weight: 500; }
   .ocr { font-family: ui-monospace, Menlo, monospace; font-size: .76rem; color: var(--mut);
-         background: var(--panel); padding: .65rem; white-space: pre-wrap; word-break: break-word; }
+         background: var(--panel); padding: .7rem .8rem; white-space: pre-wrap;
+         word-break: break-word; border-left: 3px solid var(--bord-fuerte); }
 
   .estado { font-size: .87rem; color: var(--mut); min-height: 1.4em; text-align: center; }
   .aviso-degradado {
