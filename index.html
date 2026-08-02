@@ -6,51 +6,59 @@
 <title>Renombrador de Cupones — Grupo Andino</title>
 <style>
   /* ═══════════════════════════════════════════════════════════════════════
-     Identidad de Grupo Andino Inmobiliario.
+     Blanco, con los detalles en la gama del logo.
 
-     Del logo salen tres colores: el verde hoja del anillo, el verde bosque
-     de la palabra, y el petróleo del degradado en el asta derecha. Los
-     neutros llevan una pizca de verde para que no se sientan prestados.
+     Sobre blanco la estructura no puede venir de bloques rellenos: viene de
+     filetes de un píxel y de la tipografía. Casi no hay sombras ni fondos
+     grises; el papel se deja respirar.
 
-     El verde es a la vez color de marca y color de "correcto". No compiten
-     porque ocupan formas distintas: bosque sólido en los botones, hoja en
-     pastilla pálida para el estado.
+     Los tres colores del logo se reparten los papeles, en vez de repetirse:
+       bosque    acciones y foco — lo que se pulsa
+       hoja      verificado y avance — lo que salió bien
+       petróleo  informativo — cómo se leyó el PDF, y lo que pide una mirada
+
+     El único color ajeno a la marca es el rojo de "sin nombre": un error
+     tiene que distinguirse de un aviso, y no hay nada en el logo que sirva.
      ═══════════════════════════════════════════════════════════════════════ */
   :root {
     --hoja: #5fb94a; --bosque: #0e6b3c; --petroleo: #14707f;
 
-    --bg: #f7f9f6; --fg: #0f1c14; --mut: #5c6b60; --bord: #d9e2d6;
-    --panel: #edf2ea; --acc: #0e6b3c; --acc-fg: #fff;
-    --ok: #2f7d33; --ok-bg: #e2f1dc;
-    --warn: #8a5a08; --warn-bg: #fbf1d9;
-    --bad: #a8321f; --bad-bg: #fbeae6;
-    --sombra: 0 1px 2px rgba(15, 28, 20, .06), 0 8px 24px rgba(15, 28, 20, .05);
+    --bg: #ffffff; --fg: #14201a; --mut: #6b756e;
+    --bord: #e7eae8; --bord-fuerte: #cfd6d1;
+    --panel: #fafbfa; --acc: #0e6b3c; --acc-fg: #ffffff;
+    --ok: #2f7d33; --ok-bg: #eef7ea;
+    --warn: #14707f; --warn-bg: #e9f3f4;
+    --bad: #a8321f; --bad-bg: #fbeeeb;
+    --sombra: none;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0b120e; --fg: #e5ede7; --mut: #8da095; --bord: #23302a;
-      --panel: #121a15; --acc: #6cc44a; --acc-fg: #07130c;
-      --ok: #7bcf63; --ok-bg: #102714;
-      --warn: #e0b45f; --warn-bg: #2a2213;
-      --bad: #f08a7a; --bad-bg: #2c1a18;
-      --sombra: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+      --bg: #0e1311; --fg: #e7ece9; --mut: #93a099;
+      --bord: #222a26; --bord-fuerte: #35403a;
+      --panel: #141a17; --acc: #6cc44a; --acc-fg: #08130d;
+      --ok: #7bcf63; --ok-bg: #12240f;
+      --warn: #57b6c4; --warn-bg: #0e2226;
+      --bad: #f08a7a; --bad-bg: #2b1a17;
+      --sombra: none;
     }
   }
   :root[data-theme="light"] {
-    --bg: #f7f9f6; --fg: #0f1c14; --mut: #5c6b60; --bord: #d9e2d6;
-    --panel: #edf2ea; --acc: #0e6b3c; --acc-fg: #fff;
-    --ok: #2f7d33; --ok-bg: #e2f1dc;
-    --warn: #8a5a08; --warn-bg: #fbf1d9;
-    --bad: #a8321f; --bad-bg: #fbeae6;
-    --sombra: 0 1px 2px rgba(15, 28, 20, .06), 0 8px 24px rgba(15, 28, 20, .05);
+    --bg: #ffffff; --fg: #14201a; --mut: #6b756e;
+    --bord: #e7eae8; --bord-fuerte: #cfd6d1;
+    --panel: #fafbfa; --acc: #0e6b3c; --acc-fg: #ffffff;
+    --ok: #2f7d33; --ok-bg: #eef7ea;
+    --warn: #14707f; --warn-bg: #e9f3f4;
+    --bad: #a8321f; --bad-bg: #fbeeeb;
+    --sombra: none;
   }
   :root[data-theme="dark"] {
-    --bg: #0b120e; --fg: #e5ede7; --mut: #8da095; --bord: #23302a;
-    --panel: #121a15; --acc: #6cc44a; --acc-fg: #07130c;
-    --ok: #7bcf63; --ok-bg: #102714;
-    --warn: #e0b45f; --warn-bg: #2a2213;
-    --bad: #f08a7a; --bad-bg: #2c1a18;
-    --sombra: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+    --bg: #0e1311; --fg: #e7ece9; --mut: #93a099;
+    --bord: #222a26; --bord-fuerte: #35403a;
+    --panel: #141a17; --acc: #6cc44a; --acc-fg: #08130d;
+    --ok: #7bcf63; --ok-bg: #12240f;
+    --warn: #57b6c4; --warn-bg: #0e2226;
+    --bad: #f08a7a; --bad-bg: #2b1a17;
+    --sombra: none;
   }
 
   * { box-sizing: border-box; }
@@ -87,13 +95,13 @@
   #intake { display: grid; gap: 1.1rem; justify-items: center; }
 
   .zona {
-    width: 100%; border: 2px dashed var(--bord); border-radius: 14px;
-    padding: 2.6rem 1.5rem; background: var(--panel); cursor: pointer;
+    width: 100%; border: 1.5px dashed var(--bord-fuerte); border-radius: 14px;
+    padding: 2.6rem 1.5rem; background: var(--bg); cursor: pointer;
     display: grid; justify-items: center; gap: 1rem; text-align: center;
     transition: border-color .18s, background .18s;
   }
   .zona:hover, .zona.sobre { border-color: var(--hoja);
-    background: color-mix(in srgb, var(--hoja) 9%, var(--panel)); }
+    background: color-mix(in srgb, var(--hoja) 5%, var(--bg)); }
   .zona.trabajando { cursor: default; border-style: solid; }
   .zona h2 { margin: 0; font-size: 1.12rem; font-weight: 700; letter-spacing: -.01em; }
   .zona p { margin: 0; color: var(--mut); font-size: .88rem; }
@@ -119,7 +127,7 @@
     fill: none; stroke-width: 4.5; stroke-linecap: round;
     transform: rotate(-90deg); transform-origin: 50% 50%;
   }
-  .anillo .pista { stroke: var(--bord); opacity: 0; }
+  .anillo .pista { stroke: var(--bord-fuerte); opacity: 0; }
   .anillo .avance { stroke: var(--hoja); stroke-dasharray: 100; stroke-dashoffset: 100;
                     opacity: 0; transition: stroke-dashoffset .3s ease; }
   .zona.trabajando .anillo .pista,
@@ -141,6 +149,7 @@
   details.ajustes > summary::after { content: '+'; margin-left: auto; color: var(--mut); font-size: 1.1rem; }
   details.ajustes[open] > summary::after { content: '−'; }
   details.ajustes > summary:hover { background: var(--panel); }
+  details.ajustes { background: var(--bg); }
   .rejilla { display: grid; gap: 1rem; padding: .3rem .95rem 1.05rem;
              grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
   .campo { display: flex; flex-direction: column; gap: .32rem; }
@@ -182,11 +191,12 @@
     background: transparent; color: var(--fg); font: inherit; font-weight: 500;
     border-top-width: 2px;
   }
+  .filtro { background: var(--bg); }
   .filtro:hover { background: var(--panel); }
-  .filtro[aria-pressed="true"] { background: var(--panel); border-color: var(--mut); }
+  .filtro[aria-pressed="true"] { background: var(--panel); border-color: var(--bord-fuerte); }
   .filtro b { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
   .filtro span { font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--mut); }
-  #f-todos { border-top-color: var(--petroleo); }
+  #f-todos { border-top-color: var(--bord-fuerte); }
   #f-verificado { border-top-color: var(--ok); }
   #f-revisar { border-top-color: var(--warn); }
   #f-sin-nombre { border-top-color: var(--bad); }
@@ -195,11 +205,13 @@
   .acciones { display: flex; flex-wrap: wrap; gap: .5rem; margin-left: auto; }
 
   .tabla-env { border: 1px solid var(--bord); border-radius: 10px; overflow-x: auto;
-               box-shadow: var(--sombra); margin-top: 1rem; }
+               margin-top: 1rem; background: var(--bg); }
   table { border-collapse: collapse; width: 100%; font-size: .88rem; }
-  th, td { padding: .55rem .7rem; text-align: left; border-bottom: 1px solid var(--bord); }
-  th { background: var(--panel); font-size: .66rem; font-weight: 500;
-       letter-spacing: .16em; text-transform: uppercase; color: var(--mut); white-space: nowrap; }
+  th, td { padding: .6rem .7rem; text-align: left; border-bottom: 1px solid var(--bord); }
+  th { background: var(--bg); font-size: .66rem; font-weight: 500;
+       letter-spacing: .16em; text-transform: uppercase; color: var(--mut);
+       white-space: nowrap; border-bottom: 1px solid var(--bord-fuerte); }
+  tbody tr:hover td { background: var(--panel); }
   tbody tr:last-child td { border-bottom: 0; }
   tbody tr.oculta { display: none; }
 
@@ -225,8 +237,8 @@
   .e-revisar { background: var(--warn-bg); color: var(--warn); }
   .e-sin-nombre { background: var(--bad-bg); color: var(--bad); }
   /* Cómo se leyó el PDF no es un estado: va en contorno, no en relleno. */
-  .e-texto, .e-ocr { border: 1px solid var(--bord); color: var(--mut); font-weight: 500; }
-  .e-texto { border-color: color-mix(in srgb, var(--petroleo) 50%, var(--bord)); }
+  .e-texto, .e-ocr { border: 1px solid var(--bord); color: var(--mut); font-weight: 500;
+                     background: var(--panel); }
 
   .ver { background: none; border: 0; color: var(--acc); cursor: pointer;
          font-size: .79rem; padding: 0; text-decoration: underline; font-weight: 500; }
