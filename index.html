@@ -234,6 +234,39 @@
   }
   .vacio { padding: 2rem; text-align: center; color: var(--mut); font-size: .88rem; }
 
+
+  /* ── Archivo plano para el banco ─────────────────────────────────────── */
+  .plano { margin-top: 1.6rem; border: 1px solid var(--bord); border-radius: 10px; }
+  .plano > summary {
+    cursor: pointer; padding: .85rem 1rem; list-style: none;
+    display: flex; align-items: center; gap: .6rem; font-weight: 650;
+  }
+  .plano > summary::-webkit-details-marker { display: none; }
+  .plano > summary::after { content: '+'; margin-left: auto; color: var(--mut); font-size: 1.1rem; }
+  .plano[open] > summary::after { content: '−'; }
+  .plano > summary:hover { background: var(--panel); }
+  .plano .cuerpo { padding: .2rem 1rem 1.1rem; border-top: 1px solid var(--bord); }
+  .plano .rejilla { padding: 1rem 0; }
+  .aviso-plano { border-left: 3px solid var(--bord-fuerte); background: var(--panel);
+                 padding: .6rem .8rem; border-radius: 0 6px 6px 0; font-size: .84rem;
+                 margin: .5rem 0; }
+  .aviso-plano.bien { border-left-color: var(--ok); }
+  .aviso-plano.ojo { border-left-color: var(--warn); }
+  .aviso-plano.mal { border-left-color: var(--bad); }
+  .conflicto { border: 1px solid var(--bord-fuerte); border-radius: 8px;
+               padding: .7rem .85rem; margin-bottom: .6rem; font-size: .86rem; }
+  .conflicto label { display: flex; gap: .5rem; align-items: baseline;
+                     padding: .28rem 0; cursor: pointer; }
+  .txt-salida {
+    background: var(--panel); border: 1px solid var(--bord); border-radius: 8px;
+    padding: .7rem .8rem; overflow: auto; max-height: 230px; white-space: pre;
+    font: 12.5px/1.5 ui-monospace, Menlo, monospace; color: var(--fg);
+  }
+  .par-txt { display: grid; gap: 1rem; grid-template-columns: 1fr 1fr; margin-top: 1rem; }
+  @media (max-width: 780px) { .par-txt { grid-template-columns: 1fr; } }
+  .par-txt h4 { margin: 0 0 .4rem; font-size: .8rem; font-family: ui-monospace, Menlo, monospace;
+                display: flex; align-items: center; gap: .6rem; }
+
   .oculto { display: none !important; }
   footer { margin-top: 3rem; padding-top: 1.1rem; border-top: 1px solid var(--bord);
            color: var(--mut); font-size: .78rem; }
@@ -373,6 +406,63 @@
       </table>
       <div class="vacio oculto" id="vacio">Ningún archivo en este filtro.</div>
     </div>
+
+    <details class="plano" id="plano">
+      <summary>Archivo plano para el banco <span class="rotulo" id="planoResumen"></span></summary>
+      <div class="cuerpo">
+        <div class="rejilla">
+          <div class="campo">
+            <label class="rotulo" for="nitBenef">NIT beneficiario (sin DV)</label>
+            <input type="text" id="nitBenef" value="9009414542">
+          </div>
+          <div class="campo">
+            <label class="rotulo" for="convenio">Convenio bancario</label>
+            <input type="text" id="convenio" value="15744958">
+          </div>
+          <div class="campo">
+            <label class="rotulo" for="anoPlano">Año</label>
+            <input type="text" id="anoPlano" inputmode="numeric" maxlength="4">
+          </div>
+          <div class="campo">
+            <label class="rotulo" for="mesPlano">Mes</label>
+            <select id="mesPlano"></select>
+          </div>
+          <div class="campo">
+            <label class="rotulo" for="fechaCabA15">Fecha cabecera A15</label>
+            <input type="date" id="fechaCabA15">
+          </div>
+          <div class="campo">
+            <label class="rotulo" for="fechaCabA25">Fecha cabecera A25</label>
+            <input type="date" id="fechaCabA25">
+          </div>
+        </div>
+        <p class="nota" style="text-align:left">
+          El banco fija cada mes las fechas de cabecera; no siguen un patrón. Las de
+          cada línea salen del propio cupón. El NIT y el convenio quedan guardados en
+          este navegador.
+        </p>
+
+        <div id="planoAvisos"></div>
+        <div id="planoConflictos"></div>
+
+        <div class="acciones" style="margin-left:0">
+          <button id="btnPlano">Generar A15 y A25</button>
+        </div>
+
+        <div class="par-txt oculto" id="planoSalida">
+          <div>
+            <h4><span id="nomA15"></span><button class="sec" id="dlA15"
+                style="padding:.28rem .7rem;font-size:.78rem">Descargar</button></h4>
+            <div class="txt-salida" id="outA15"></div>
+          </div>
+          <div>
+            <h4><span id="nomA25"></span><button class="sec" id="dlA25"
+                style="padding:.28rem .7rem;font-size:.78rem">Descargar</button></h4>
+            <div class="txt-salida" id="outA25"></div>
+          </div>
+        </div>
+      </div>
+    </details>
   </section>
 
   <footer>
@@ -385,6 +475,7 @@
 <script src="vendor/tesseract.min.js"></script>
 <script src="vendor/jszip.min.js"></script>
 <script src="js/extract.js"></script>
+<script src="js/plano.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

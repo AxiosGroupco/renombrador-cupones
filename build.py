@@ -42,6 +42,7 @@ inline = {
     'vendor/tesseract.min.js': leer('vendor', 'tesseract.min.js'),
     'vendor/jszip.min.js': leer('vendor', 'jszip.min.js'),
     'js/extract.js': leer('js', 'extract.js'),
+    'js/plano.js': leer('js', 'plano.js'),
     'js/app.js': leer('js', 'app.js'),
 }
 for ruta, contenido in inline.items():

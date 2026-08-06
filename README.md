@@ -83,6 +83,33 @@ leyó el motor, útil para entender un caso raro.
 
 ---
 
+## Archivo plano para el banco
+
+Además de renombrar, la herramienta genera los dos TXT de recaudo (A15 y A25)
+a partir de los mismos PDF: no hay que volver a subirlos. Está en la sección
+plegable **Archivo plano para el banco**, debajo de la tabla.
+
+Se indica el NIT beneficiario y el convenio —quedan guardados en el navegador—,
+el periodo, y las dos fechas de cabecera que el banco fija cada mes. El resto
+sale del propio cupón.
+
+`js/plano.js` es una **copia literal** de la lógica de
+`generador_cupones_inmobiliaria.html`: formato de cabecera y líneas, saltos
+CRLF, consolidación multi-local, conflictos y normalización de fechas al valor
+más frecuente. Nada de eso se tocó.
+
+El único cambio está marcado con `[CAMBIO]` en `RE_NIT_ARRENDATARIO`: el
+original exigía el dígito pegado a `NIT:`, y los cupones traen `NIT: 10432871`
+con espacio. Con la versión original, **8 de 8 cupones de agosto de 2026
+fallaban** con «sin NIT arrendatario» y el TXT salía con cabecera y cero
+registros. Admitiendo el espacio, los 8 se leen completos.
+
+Comprobado que el cambio no altera la salida: se corrió el generador original
+—parcheado solo en esa expresión— sobre los mismos 8 cupones, y los dos TXT
+resultan **idénticos carácter a carácter** a los que produce esta versión.
+
+---
+
 ## Publicado
 
 Está publicado como Artifact en claude.ai:

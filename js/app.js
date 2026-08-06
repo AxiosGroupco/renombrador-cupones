@@ -7,6 +7,7 @@
 
   const $ = id => document.getElementById(id);
   const E = window.Extract;
+  const P = window.Plano;
 
   // Tesseract arranca su worker desde un blob, así que las rutas tienen que
   // ser absolutas: una ruta relativa no se puede resolver desde ahí.
@@ -288,11 +289,25 @@
     let ultimoTexto = '';
     let fuente = null;
 
+    // Datos para el archivo plano del banco. Su parser necesita el texto
+    // reconstruido POR LÍNEAS, distinto del que usa el renombrado, así que se
+    // saca aparte del mismo documento ya abierto.
+    let plano = null, planoMotivo = null;
+    try {
+      const porLineas = await P.textoPorLineas(pdf);
+      const pc = P.parsearCupon(porLineas, file.name);
+      if (pc.ok) plano = pc.cupon; else planoMotivo = pc.motivo;
+    } catch (e) {
+      planoMotivo = 'no se pudo leer el PDF';
+    }
+
     const armar = (texto, f) => {
       const r = E.procesar(texto, file.name, cfg.mes, cfg.anio);
       r.texto = texto;
       r.fuente = f;
       r.file = file;
+      r.plano = plano;
+      r.planoMotivo = planoMotivo;
       return r;
     };
 
@@ -547,6 +562,7 @@
     $('revision').classList.toggle('visible', hay);
     $('intake').classList.toggle('compacto', hay);
     aplicarFiltro(S.filtro || 'todos');
+    if (hay) prepararPlano();
   }
 
   /* --------------------------------------------------------------------- */
@@ -603,6 +619,7 @@
             original: file.name, nombre: null, metodo: null,
             mes: cfg.mes, anio: cfg.anio, estado: 'sin-nombre',
             origenFecha: 'manual', nuevoNombre: null, fuente: null,
+            plano: null, planoMotivo: 'no se pudo leer el PDF',
             texto: 'Error: ' + (err && err.message ? err.message : err), file,
           }))
           .then(r => {
@@ -739,6 +756,180 @@
     estado(`Se guardaron ${n} archivos renombrados en la carpeta elegida.`);
   }
 
+
+  /* --------------------------------------------------------------------- */
+  /* Archivo plano para el banco                                            */
+  /*                                                                        */
+  /* Reutiliza los mismos PDF ya leídos: no hay que volver a subirlos. La    */
+  /* lógica de consolidación y el formato de salida están en plano.js, tal   */
+  /* como los pide el banco.                                                 */
+  /* --------------------------------------------------------------------- */
+
+  const LS_PLANO = 'grupoandino_plano_cfg';
+
+  function iniciarPlano() {
+    const selMes = $('mesPlano');
+    E.MESES.forEach((m, i) => {
+      const o = document.createElement('option');
+      o.value = String(i + 1);
+      o.textContent = m[0] + m.slice(1).toLowerCase();
+      selMes.appendChild(o);
+    });
+    try {
+      const c = JSON.parse(localStorage.getItem(LS_PLANO) || '{}');
+      if (c.nitBenef) $('nitBenef').value = c.nitBenef;
+      if (c.convenio) $('convenio').value = c.convenio;
+    } catch (e) { /* configuración corrupta: se ignora */ }
+    const guardar = () => {
+      try {
+        localStorage.setItem(LS_PLANO, JSON.stringify({
+          nitBenef: $('nitBenef').value.trim(), convenio: $('convenio').value.trim(),
+        }));
+      } catch (e) { /* modo privado: no se guarda */ }
+    };
+    $('nitBenef').addEventListener('change', guardar);
+    $('convenio').addEventListener('change', guardar);
+    $('btnPlano').addEventListener('click', generarPlano);
+  }
+
+  /** Periodo y contador, deducidos del lote ya procesado. */
+  function prepararPlano() {
+    const conCupon = S.filas.filter(f => f.plano);
+    $('planoResumen').textContent = conCupon.length
+      ? `${conCupon.length} de ${S.filas.length} cupones leídos`
+      : 'ningún cupón legible';
+
+    const f = S.filas.find(x => x.mes && x.anio);
+    if (f && !$('anoPlano').value) $('anoPlano').value = f.anio;
+    if (f) {
+      const i = E.MESES.indexOf(f.mes);
+      if (i >= 0 && !$('mesPlano').dataset.tocado) $('mesPlano').value = String(i + 1);
+    }
+    $('planoSalida').classList.add('oculto');
+    $('planoAvisos').innerHTML = '';
+    $('planoConflictos').innerHTML = '';
+  }
+
+  function fechaDeInput(v) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || '');
+    return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
+  }
+
+  function avisoPlano(clase, texto) {
+    const d = document.createElement('div');
+    d.className = 'aviso-plano ' + clase;
+    d.textContent = texto;
+    $('planoAvisos').appendChild(d);
+  }
+
+  function pintarConflictos(conflictos) {
+    const cont = $('planoConflictos');
+    cont.innerHTML = '';
+    if (!conflictos.length) return;
+    const enc = document.createElement('div');
+    enc.className = 'rotulo';
+    enc.style.margin = '.8rem 0 .5rem';
+    enc.textContent = 'Elige el cupón correcto en cada caso';
+    cont.appendChild(enc);
+
+    conflictos.forEach((c, i) => {
+      const div = document.createElement('div');
+      div.className = 'conflicto';
+      div.dataset.nit = c.nit_o_cedula;
+      div.dataset.local = P.localClave(c.identificador_local);
+      const t = document.createElement('div');
+      t.innerHTML = `<b>NIT ${c.nit_o_cedula}</b> · local <b>${c.identificador_local || '(sin local)'}</b>`;
+      div.appendChild(t);
+      c.candidatos.forEach((cand, j) => {
+        const lab = document.createElement('label');
+        const r = document.createElement('input');
+        r.type = 'radio'; r.name = 'cf_' + i; r.value = cand.archivo_origen;
+        if (j === 0) r.checked = true;
+        r.style.width = 'auto';
+        const s = document.createElement('span');
+        s.textContent = `${cand.archivo_origen} — ${cand.nombre || '(sin nombre)'} · `
+          + `op ${miles(cand.valor_oportuno)} / r15 ${miles(cand.valor_recargo_15)}`
+          + ` / r25 ${miles(cand.valor_recargo_25)}`;
+        lab.append(r, s);
+        div.appendChild(lab);
+      });
+      cont.appendChild(div);
+    });
+  }
+
+  const miles = n => new Intl.NumberFormat('es-CO').format(n);
+
+  function recolectarResoluciones() {
+    const res = {};
+    for (const div of document.querySelectorAll('.conflicto')) {
+      const sel = div.querySelector('input[type=radio]:checked');
+      if (sel) res[`${div.dataset.nit}__${div.dataset.local}`] = sel.value;
+    }
+    return res;
+  }
+
+  function generarPlano() {
+    $('planoAvisos').innerHTML = '';
+    $('planoSalida').classList.add('oculto');
+
+    const nitBenef = $('nitBenef').value.trim();
+    const convenio = $('convenio').value.trim();
+    const anio = $('anoPlano').value.trim();
+    const mes = parseInt($('mesPlano').value, 10);
+    const fA15 = fechaDeInput($('fechaCabA15').value);
+    const fA25 = fechaDeInput($('fechaCabA25').value);
+
+    const cupones = S.filas.filter(f => f.plano).map(f => f.plano);
+    const sinLeer = S.filas.filter(f => !f.plano);
+
+    if (!nitBenef || !convenio) return avisoPlano('mal', 'Falta el NIT beneficiario o el convenio.');
+    if (!/^\d{4}$/.test(anio) || !mes) return avisoPlano('mal', 'Año o mes inválido.');
+    if (!fA15 || !fA25) return avisoPlano('mal', 'Faltan las fechas de cabecera A15 y A25. Las indica el banco.');
+    if (!cupones.length) return avisoPlano('mal', 'Ningún cupón del lote se pudo leer para el archivo plano.');
+
+    // Mismo orden que el original: resolver conflictos, normalizar, consolidar.
+    const filtrados = P.aplicarResoluciones(cupones, recolectarResoluciones());
+    const normalizados = P.normalizarFechasAModo(filtrados);
+    const cons = P.consolidar(normalizados);
+
+    pintarConflictos(cons.conflictos);
+    if (cons.conflictos.length) {
+      avisoPlano('mal', `Quedan ${cons.conflictos.length} conflicto(s) por resolver. `
+        + 'Elige un cupón en cada uno y vuelve a generar.');
+      return;
+    }
+
+    avisoPlano('bien', `${cons.lineas.length} línea(s) listas para emitir.`);
+    if (cons.multiLocal.length) {
+      avisoPlano('ojo', `${cons.multiLocal.length} NIT con varios locales: se sumaron `
+        + `(${cons.multiLocal.map(m => m.nit_o_cedula).join(', ')}).`);
+    }
+    if (sinLeer.length) {
+      avisoPlano('ojo', `${sinLeer.length} archivo(s) sin leer para el plano: `
+        + sinLeer.slice(0, 4).map(f => `${f.original} — ${f.planoMotivo || 'sin datos'}`).join(' · ')
+        + (sinLeer.length > 4 ? ' …' : ''));
+    }
+
+    const txtA15 = P.generarTxtA15(cons.lineas, nitBenef, convenio, fA15);
+    const txtA25 = P.generarTxtA25(cons.lineas, nitBenef, convenio, fA25);
+    const mm = String(mes).padStart(2, '0');
+    const nomA15 = `CUPONES_${anio}_${mm}_A_15.txt`;
+    const nomA25 = `CUPONES_${anio}_${mm}_A_25.txt`;
+
+    $('nomA15').textContent = nomA15;
+    $('nomA25').textContent = nomA25;
+    // El ↵ solo se muestra; el archivo descargado lleva CRLF de verdad.
+    $('outA15').textContent = txtA15.replace(/\r\n/g, '↵\n');
+    $('outA25').textContent = txtA25.replace(/\r\n/g, '↵\n');
+    $('dlA15').onclick = () => descargarTxt(nomA15, txtA15);
+    $('dlA25').onclick = () => descargarTxt(nomA25, txtA25);
+    $('planoSalida').classList.remove('oculto');
+  }
+
+  function descargarTxt(nombre, contenido) {
+    descargarBlob(new Blob([contenido], { type: 'text/plain;charset=utf-8' }), nombre);
+  }
+
   /* --------------------------------------------------------------------- */
   /* Eventos                                                                */
   /* --------------------------------------------------------------------- */
@@ -802,6 +993,7 @@
   }
 
   iniciarControles();
+  iniciarPlano();
   iniciarEventos();
   window.__APP__ = S;
   window.__detenerOcr__ = detenerOcr;

@@ -132,7 +132,7 @@
    * documento empieza directamente por el arrendatario, pegado a su cédula
    * y a NIT:
    *
-   *     LOZANO SIERRA ALBA MERCEDES 28229113NIT: 28229113 15744958 DIAG 19…
+   *     RIVAS CARDONA MARTIN ELIAS 10432871NIT: 10432871 15744958 CALLE 19…
    *
    * Anclar al principio es mucho más seguro que buscar la primera
    * coincidencia en todo el documento, que es lo que hacía que en algunos
