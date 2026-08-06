@@ -89,9 +89,17 @@ Además de renombrar, la herramienta genera los dos TXT de recaudo (A15 y A25)
 a partir de los mismos PDF: no hay que volver a subirlos. Está en la sección
 plegable **Archivo plano para el banco**, debajo de la tabla.
 
-Se indica el NIT beneficiario y el convenio —quedan guardados en el navegador—,
-el periodo, y las dos fechas de cabecera que el banco fija cada mes. El resto
-sale del propio cupón.
+Se indica el NIT beneficiario y el convenio —quedan guardados en el navegador—
+y el periodo. Nada más.
+
+Las **fechas de cabecera son el 15 y el 25 del periodo elegido**: si se pone
+septiembre de 2026, salen `20260915` y `20260925`. El generador original las
+pedía a mano, dando por hecho que el banco las fijaba sin patrón; no es así.
+La pantalla muestra cuáles se van a usar antes de generar.
+
+Una vez generados, **el botón de descarga pasa a incluirlos**: un solo ZIP con
+los cupones renombrados, el reporte CSV y los dos TXT. Solo se descarga el PDF
+suelto cuando hay un único cupón y todavía no se han generado los planos.
 
 `js/plano.js` es una **copia literal** de la lógica de
 `generador_cupones_inmobiliaria.html`: formato de cabecera y líneas, saltos

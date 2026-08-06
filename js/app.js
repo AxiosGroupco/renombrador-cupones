@@ -131,6 +131,7 @@
     cancelado: false,
     scheduler: null,
     workers: [],
+    plano: null,   // { nomA15, txtA15, nomA25, txtA25 } una vez generados
   };
 
   /* --------------------------------------------------------------------- */
@@ -429,8 +430,10 @@
     S.filas.forEach(f => { c[f.estado] = (c[f.estado] || 0) + 1; });
     $('cTotal').textContent = S.filas.length;
     // El botón anuncia lo que realmente descarga.
-    $('descargar').textContent = S.filas.length === 1 ? 'Descargar PDF' : 'Descargar ZIP';
-    $('descargarCsv').classList.toggle('oculto', S.filas.length === 1);
+    $('descargar').textContent = S.plano
+      ? 'Descargar ZIP (con A15 y A25)'
+      : (S.filas.length === 1 ? 'Descargar PDF' : 'Descargar ZIP');
+    $('descargarCsv').classList.toggle('oculto', S.filas.length === 1 && !S.plano);
     $('cVerif').textContent = c.verificado;
     $('cRevisar').textContent = c.revisar;
     $('cSin').textContent = c['sin-nombre'];
@@ -711,14 +714,15 @@
   }
 
   /**
-   * Con un único cupón, comprimir estorba: obliga a descomprimir para sacar un
-   * solo archivo. Se descarga el PDF ya renombrado, tal cual.
+   * Un único cupón y nada más que empaquetar: se descarga el PDF suelto, que
+   * comprimir uno solo estorba. En cuanto hay varios cupones —o ya se
+   * generaron los planos del banco— se agrupa todo en un ZIP.
    */
   async function descargar() {
     const listos = S.filas.filter(f => f.nuevoNombre && f.file);
     if (!listos.length) { estado('No hay ningún archivo con nombre para descargar.'); return; }
 
-    if (S.filas.length === 1) {
+    if (S.filas.length === 1 && !S.plano) {
       const f = listos[0];
       descargarBlob(f.file, f.nuevoNombre);
       estado(`Descargado: ${f.nuevoNombre}`);
@@ -728,10 +732,16 @@
     const zip = new JSZip();
     for (const f of listos) zip.file(f.nuevoNombre, f.file);
     zip.file('reporte_renombrado.csv', construirCsv());
+    if (S.plano) {
+      zip.file(S.plano.nomA15, S.plano.txtA15);
+      zip.file(S.plano.nomA25, S.plano.txtA25);
+    }
     estado('Comprimiendo…');
     const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
-    descargarBlob(blob, `Cupones renombrados ${sufijoPeriodo()}.zip`);
-    estado(`ZIP generado con ${listos.length} archivos renombrados.`);
+    descargarBlob(blob, `Cupones ${sufijoPeriodo()}.zip`);
+    estado(S.plano
+      ? `ZIP con ${listos.length} cupón(es) renombrado(s) y los planos A15 y A25.`
+      : `ZIP generado con ${listos.length} archivos renombrados.`);
   }
 
   async function guardarEnCarpeta() {
@@ -789,6 +799,11 @@
     };
     $('nitBenef').addEventListener('change', guardar);
     $('convenio').addEventListener('change', guardar);
+    $('anoPlano').addEventListener('input', pintarFechasCabecera);
+    $('mesPlano').addEventListener('change', () => {
+      $('mesPlano').dataset.tocado = '1';
+      pintarFechasCabecera();
+    });
     $('btnPlano').addEventListener('click', generarPlano);
   }
 
@@ -805,14 +820,35 @@
       const i = E.MESES.indexOf(f.mes);
       if (i >= 0 && !$('mesPlano').dataset.tocado) $('mesPlano').value = String(i + 1);
     }
+    S.plano = null;
     $('planoSalida').classList.add('oculto');
     $('planoAvisos').innerHTML = '';
     $('planoConflictos').innerHTML = '';
+    pintarFechasCabecera();
   }
 
-  function fechaDeInput(v) {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || '');
-    return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
+  /**
+   * Fechas de cabecera: siempre el 15 y el 25 del periodo elegido.
+   *
+   * El generador original las pedía a mano, dando por hecho que el banco las
+   * fijaba sin patrón cada mes. No es así: son fijas.
+   */
+  function fechasCabecera() {
+    const anio = parseInt($('anoPlano').value, 10);
+    const mes = parseInt($('mesPlano').value, 10);
+    if (!anio || !mes) return null;
+    return { a15: { y: anio, m: mes, d: 15 }, a25: { y: anio, m: mes, d: 25 } };
+  }
+
+  /** Deja ver qué fechas se van a usar, para que no haya que adivinarlas. */
+  function pintarFechasCabecera() {
+    const f = fechasCabecera();
+    const el = $('fechasCab');
+    if (!el) return;
+    if (!f) { el.textContent = '—'; return; }
+    const mesNom = E.MESES[f.a15.m - 1];
+    const bonito = mesNom[0] + mesNom.slice(1).toLowerCase();
+    el.textContent = `15 y 25 de ${bonito} de ${f.a15.y}`;
   }
 
   function avisoPlano(clase, texto) {
@@ -876,15 +912,16 @@
     const convenio = $('convenio').value.trim();
     const anio = $('anoPlano').value.trim();
     const mes = parseInt($('mesPlano').value, 10);
-    const fA15 = fechaDeInput($('fechaCabA15').value);
-    const fA25 = fechaDeInput($('fechaCabA25').value);
+    const fc = fechasCabecera();
+    const fA15 = fc && fc.a15;
+    const fA25 = fc && fc.a25;
 
     const cupones = S.filas.filter(f => f.plano).map(f => f.plano);
     const sinLeer = S.filas.filter(f => !f.plano);
 
     if (!nitBenef || !convenio) return avisoPlano('mal', 'Falta el NIT beneficiario o el convenio.');
     if (!/^\d{4}$/.test(anio) || !mes) return avisoPlano('mal', 'Año o mes inválido.');
-    if (!fA15 || !fA25) return avisoPlano('mal', 'Faltan las fechas de cabecera A15 y A25. Las indica el banco.');
+    if (!fA15 || !fA25) return avisoPlano('mal', 'Periodo incompleto: no se pueden calcular las fechas de cabecera.');
     if (!cupones.length) return avisoPlano('mal', 'Ningún cupón del lote se pudo leer para el archivo plano.');
 
     // Mismo orden que el original: resolver conflictos, normalizar, consolidar.
@@ -924,6 +961,10 @@
     $('dlA15').onclick = () => descargarTxt(nomA15, txtA15);
     $('dlA25').onclick = () => descargarTxt(nomA25, txtA25);
     $('planoSalida').classList.remove('oculto');
+
+    // Quedan disponibles para la descarga conjunta.
+    S.plano = { nomA15, txtA15, nomA25, txtA25 };
+    pintarResumen();
   }
 
   function descargarTxt(nombre, contenido) {
@@ -978,7 +1019,7 @@
     }
 
     $('limpiar').addEventListener('click', () => {
-      S.archivos = []; S.filas = []; S.filtro = 'todos';
+      S.archivos = []; S.filas = []; S.filtro = 'todos'; S.plano = null;
       entrada.value = '';
       pintarTabla(); pintarResumen();
       $('procesar').disabled = true;
