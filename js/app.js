@@ -413,6 +413,9 @@
     const c = { verificado: 0, revisar: 0, 'sin-nombre': 0 };
     S.filas.forEach(f => { c[f.estado] = (c[f.estado] || 0) + 1; });
     $('cTotal').textContent = S.filas.length;
+    // El botón anuncia lo que realmente descarga.
+    $('descargar').textContent = S.filas.length === 1 ? 'Descargar PDF' : 'Descargar ZIP';
+    $('descargarCsv').classList.toggle('oculto', S.filas.length === 1);
     $('cVerif').textContent = c.verificado;
     $('cRevisar').textContent = c.revisar;
     $('cSin').textContent = c['sin-nombre'];
@@ -690,20 +693,28 @@
     return f ? `${f.mes} ${f.anio}` : 'sin periodo';
   }
 
-  async function descargarZip() {
-    const zip = new JSZip();
-    let n = 0;
-    for (const f of S.filas) {
-      if (!f.nuevoNombre || !f.file) continue;
-      zip.file(f.nuevoNombre, f.file);
-      n++;
+  /**
+   * Con un único cupón, comprimir estorba: obliga a descomprimir para sacar un
+   * solo archivo. Se descarga el PDF ya renombrado, tal cual.
+   */
+  async function descargar() {
+    const listos = S.filas.filter(f => f.nuevoNombre && f.file);
+    if (!listos.length) { estado('No hay ningún archivo con nombre para descargar.'); return; }
+
+    if (S.filas.length === 1) {
+      const f = listos[0];
+      descargarBlob(f.file, f.nuevoNombre);
+      estado(`Descargado: ${f.nuevoNombre}`);
+      return;
     }
+
+    const zip = new JSZip();
+    for (const f of listos) zip.file(f.nuevoNombre, f.file);
     zip.file('reporte_renombrado.csv', construirCsv());
-    if (!n) { estado('No hay archivos con nombre para exportar.'); return; }
     estado('Comprimiendo…');
     const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
     descargarBlob(blob, `Cupones renombrados ${sufijoPeriodo()}.zip`);
-    estado(`ZIP generado con ${n} archivos renombrados.`);
+    estado(`ZIP generado con ${listos.length} archivos renombrados.`);
   }
 
   async function guardarEnCarpeta() {
@@ -766,7 +777,7 @@
       S.cancelado = true;
       estado('Cancelando… se terminarán los archivos en curso.');
     });
-    $('descargar').addEventListener('click', descargarZip);
+    $('descargar').addEventListener('click', descargar);
     $('descargarCsv').addEventListener('click',
       () => descargarBlob(new Blob([construirCsv()], { type: 'text/csv;charset=utf-8' }),
         `reporte_renombrado ${sufijoPeriodo()}.csv`));

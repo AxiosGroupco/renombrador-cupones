@@ -17,6 +17,10 @@ hay nada que instalar en el computador (ni poppler ni Tesseract).
 5. **Descargar ZIP** (o **Guardar en carpeta…** en Chrome/Edge, que escribe los
    archivos directamente donde elijas).
 
+Con **un solo cupón** el botón dice **Descargar PDF** y baja el archivo ya
+renombrado, sin comprimir: no tiene sentido obligar a descomprimir para sacar
+uno. A partir de dos, se agrupan en ZIP junto con el reporte CSV.
+
 La pantalla tiene dos momentos. Mientras no hay resultados manda la zona de
 carga; en cuanto los hay, se encoge a una franja y la tabla pasa a ocupar el
 espacio.
