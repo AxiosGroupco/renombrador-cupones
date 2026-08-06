@@ -97,9 +97,15 @@ septiembre de 2026, salen `20260915` y `20260925`. El generador original las
 pedía a mano, dando por hecho que el banco las fijaba sin patrón; no es así.
 La pantalla muestra cuáles se van a usar antes de generar.
 
-Una vez generados, **el botón de descarga pasa a incluirlos**: un solo ZIP con
-los cupones renombrados, el reporte CSV y los dos TXT. Solo se descarga el PDF
-suelto cuando hay un único cupón y todavía no se han generado los planos.
+**Descargar trae todo de una vez.** No hace falta pasar por esta sección: si
+los planos aún no están generados, el botón los genera al vuelo y los mete en
+el ZIP junto con los cupones renombrados y el reporte. Un clic, un archivo.
+
+El botón **Generar A15 y A25** sigue estando para ver el contenido de los TXT
+en pantalla antes de descargar, o para resolver conflictos.
+
+Solo se descarga el PDF suelto cuando hay un único cupón y los planos no se
+pueden producir; en ese caso el mensaje dice por qué.
 
 `js/plano.js` es una **copia literal** de la lógica de
 `generador_cupones_inmobiliaria.html`: formato de cabecera y líneas, saltos

@@ -430,10 +430,13 @@
     S.filas.forEach(f => { c[f.estado] = (c[f.estado] || 0) + 1; });
     $('cTotal').textContent = S.filas.length;
     // El botón anuncia lo que realmente descarga.
-    $('descargar').textContent = S.plano
-      ? 'Descargar ZIP (con A15 y A25)'
+    // El botón anuncia lo que va a intentar: los planos se generan al vuelo si
+    // hace falta, así que no depende de si ya se pulsó "Generar".
+    const hayCupones = S.filas.some(f => f.plano);
+    $('descargar').textContent = hayCupones
+      ? 'Descargar todo (cupones + A15 y A25)'
       : (S.filas.length === 1 ? 'Descargar PDF' : 'Descargar ZIP');
-    $('descargarCsv').classList.toggle('oculto', S.filas.length === 1 && !S.plano);
+    $('descargarCsv').classList.toggle('oculto', S.filas.length === 1 && !hayCupones);
     $('cVerif').textContent = c.verificado;
     $('cRevisar').textContent = c.revisar;
     $('cSin').textContent = c['sin-nombre'];
@@ -714,18 +717,29 @@
   }
 
   /**
-   * Un único cupón y nada más que empaquetar: se descarga el PDF suelto, que
-   * comprimir uno solo estorba. En cuanto hay varios cupones —o ya se
-   * generaron los planos del banco— se agrupa todo en un ZIP.
+   * Descarga todo lo del lote de una vez.
+   *
+   * Si los planos aún no se han generado, se generan aquí mismo: el botón está
+   * en la barra de arriba y la sección del plano abajo, así que lo normal es
+   * pulsarlo sin haber pasado por ella. Solo se baja el PDF suelto cuando hay
+   * un único cupón y los planos no se pueden producir.
    */
   async function descargar() {
     const listos = S.filas.filter(f => f.nuevoNombre && f.file);
     if (!listos.length) { estado('No hay ningún archivo con nombre para descargar.'); return; }
 
+    // Producir los planos si aún no están; deja la pantalla al día de paso.
+    let motivoSinPlano = null;
+    if (!S.plano) {
+      const r = calcularPlanos();
+      if (r.ok) generarPlano();          // rellena S.plano y muestra el resultado
+      else motivoSinPlano = r.motivo;
+    }
+
     if (S.filas.length === 1 && !S.plano) {
       const f = listos[0];
       descargarBlob(f.file, f.nuevoNombre);
-      estado(`Descargado: ${f.nuevoNombre}`);
+      estado(`Descargado: ${f.nuevoNombre}. Sin planos: ${motivoSinPlano}.`);
       return;
     }
 
@@ -739,9 +753,13 @@
     estado('Comprimiendo…');
     const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
     descargarBlob(blob, `Cupones ${sufijoPeriodo()}.zip`);
-    estado(S.plano
-      ? `ZIP con ${listos.length} cupón(es) renombrado(s) y los planos A15 y A25.`
-      : `ZIP generado con ${listos.length} archivos renombrados.`);
+
+    if (S.plano) {
+      estado(`ZIP con ${listos.length} cupón(es) renombrado(s) y los planos A15 y A25.`);
+    } else {
+      estado(`ZIP con ${listos.length} cupón(es). Sin planos: ${motivoSinPlano}.`);
+      if (motivoSinPlano) $('plano').open = true;
+    }
   }
 
   async function guardarEnCarpeta() {
@@ -904,66 +922,92 @@
     return res;
   }
 
-  function generarPlano() {
-    $('planoAvisos').innerHTML = '';
-    $('planoSalida').classList.add('oculto');
-
+  /**
+   * Calcula los dos TXT sin tocar la pantalla.
+   *
+   * Se separa del botón para que la descarga pueda producirlos por su cuenta:
+   * el botón de descargar está arriba y esta sección abajo, así que lo normal
+   * es pulsar descargar sin haber pasado por aquí.
+   *
+   * @returns {{ok:true, datos:Object, cons:Object, sinLeer:Array}}
+   *        | {{ok:false, motivo:string, conflictos?:Array}}
+   */
+  function calcularPlanos() {
     const nitBenef = $('nitBenef').value.trim();
     const convenio = $('convenio').value.trim();
     const anio = $('anoPlano').value.trim();
     const mes = parseInt($('mesPlano').value, 10);
     const fc = fechasCabecera();
-    const fA15 = fc && fc.a15;
-    const fA25 = fc && fc.a25;
 
     const cupones = S.filas.filter(f => f.plano).map(f => f.plano);
     const sinLeer = S.filas.filter(f => !f.plano);
 
-    if (!nitBenef || !convenio) return avisoPlano('mal', 'Falta el NIT beneficiario o el convenio.');
-    if (!/^\d{4}$/.test(anio) || !mes) return avisoPlano('mal', 'Año o mes inválido.');
-    if (!fA15 || !fA25) return avisoPlano('mal', 'Periodo incompleto: no se pueden calcular las fechas de cabecera.');
-    if (!cupones.length) return avisoPlano('mal', 'Ningún cupón del lote se pudo leer para el archivo plano.');
+    if (!nitBenef || !convenio) return { ok: false, motivo: 'falta el NIT beneficiario o el convenio' };
+    if (!/^\d{4}$/.test(anio) || !mes) return { ok: false, motivo: 'año o mes inválido' };
+    if (!fc) return { ok: false, motivo: 'no se pueden calcular las fechas de cabecera' };
+    if (!cupones.length) return { ok: false, motivo: 'ningún cupón del lote se pudo leer para el plano' };
 
     // Mismo orden que el original: resolver conflictos, normalizar, consolidar.
     const filtrados = P.aplicarResoluciones(cupones, recolectarResoluciones());
     const normalizados = P.normalizarFechasAModo(filtrados);
     const cons = P.consolidar(normalizados);
 
-    pintarConflictos(cons.conflictos);
     if (cons.conflictos.length) {
-      avisoPlano('mal', `Quedan ${cons.conflictos.length} conflicto(s) por resolver. `
-        + 'Elige un cupón en cada uno y vuelve a generar.');
+      return {
+        ok: false, conflictos: cons.conflictos,
+        motivo: `quedan ${cons.conflictos.length} conflicto(s) por resolver`,
+      };
+    }
+
+    const mm = String(mes).padStart(2, '0');
+    return {
+      ok: true, cons, sinLeer,
+      datos: {
+        nomA15: `CUPONES_${anio}_${mm}_A_15.txt`,
+        txtA15: P.generarTxtA15(cons.lineas, nitBenef, convenio, fc.a15),
+        nomA25: `CUPONES_${anio}_${mm}_A_25.txt`,
+        txtA25: P.generarTxtA25(cons.lineas, nitBenef, convenio, fc.a25),
+      },
+    };
+  }
+
+  /** Botón "Generar A15 y A25": calcula y muestra el resultado en pantalla. */
+  function generarPlano() {
+    $('planoAvisos').innerHTML = '';
+    $('planoSalida').classList.add('oculto');
+
+    const r = calcularPlanos();
+    pintarConflictos(r.conflictos || []);
+    if (!r.ok) {
+      avisoPlano('mal', r.motivo.charAt(0).toUpperCase() + r.motivo.slice(1)
+        + (r.conflictos ? '. Elige un cupón en cada uno y vuelve a generar.' : '.'));
+      S.plano = null;
+      pintarResumen();
       return;
     }
 
-    avisoPlano('bien', `${cons.lineas.length} línea(s) listas para emitir.`);
-    if (cons.multiLocal.length) {
-      avisoPlano('ojo', `${cons.multiLocal.length} NIT con varios locales: se sumaron `
-        + `(${cons.multiLocal.map(m => m.nit_o_cedula).join(', ')}).`);
+    avisoPlano('bien', `${r.cons.lineas.length} línea(s) listas para emitir.`);
+    if (r.cons.multiLocal.length) {
+      avisoPlano('ojo', `${r.cons.multiLocal.length} NIT con varios locales: se sumaron `
+        + `(${r.cons.multiLocal.map(m => m.nit_o_cedula).join(', ')}).`);
     }
-    if (sinLeer.length) {
-      avisoPlano('ojo', `${sinLeer.length} archivo(s) sin leer para el plano: `
-        + sinLeer.slice(0, 4).map(f => `${f.original} — ${f.planoMotivo || 'sin datos'}`).join(' · ')
-        + (sinLeer.length > 4 ? ' …' : ''));
+    if (r.sinLeer.length) {
+      avisoPlano('ojo', `${r.sinLeer.length} archivo(s) sin leer para el plano: `
+        + r.sinLeer.slice(0, 4).map(f => `${f.original} — ${f.planoMotivo || 'sin datos'}`).join(' · ')
+        + (r.sinLeer.length > 4 ? ' …' : ''));
     }
 
-    const txtA15 = P.generarTxtA15(cons.lineas, nitBenef, convenio, fA15);
-    const txtA25 = P.generarTxtA25(cons.lineas, nitBenef, convenio, fA25);
-    const mm = String(mes).padStart(2, '0');
-    const nomA15 = `CUPONES_${anio}_${mm}_A_15.txt`;
-    const nomA25 = `CUPONES_${anio}_${mm}_A_25.txt`;
-
-    $('nomA15').textContent = nomA15;
-    $('nomA25').textContent = nomA25;
+    const d = r.datos;
+    $('nomA15').textContent = d.nomA15;
+    $('nomA25').textContent = d.nomA25;
     // El ↵ solo se muestra; el archivo descargado lleva CRLF de verdad.
-    $('outA15').textContent = txtA15.replace(/\r\n/g, '↵\n');
-    $('outA25').textContent = txtA25.replace(/\r\n/g, '↵\n');
-    $('dlA15').onclick = () => descargarTxt(nomA15, txtA15);
-    $('dlA25').onclick = () => descargarTxt(nomA25, txtA25);
+    $('outA15').textContent = d.txtA15.replace(/\r\n/g, '↵\n');
+    $('outA25').textContent = d.txtA25.replace(/\r\n/g, '↵\n');
+    $('dlA15').onclick = () => descargarTxt(d.nomA15, d.txtA15);
+    $('dlA25').onclick = () => descargarTxt(d.nomA25, d.txtA25);
     $('planoSalida').classList.remove('oculto');
 
-    // Quedan disponibles para la descarga conjunta.
-    S.plano = { nomA15, txtA15, nomA25, txtA25 };
+    S.plano = d;
     pintarResumen();
   }
 
